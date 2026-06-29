@@ -1,0 +1,11 @@
+{
+  "source_xlsx": "/home/kptae/project/qnt_algorithm/claudeCode/data/FDA_Clinical_selected_model.xlsx",
+  "clean_sheet": "all_concentration",
+  "clean_unique_sample_ids": 1435,
+  "fda_unique_sample_ids": 1507,
+  "kept_samples": 1434,
+  "te_samples": 73,
+  "kept_rows": 147284,
+  "te_rows": 5550,
+  "total_rows": 152834
+}

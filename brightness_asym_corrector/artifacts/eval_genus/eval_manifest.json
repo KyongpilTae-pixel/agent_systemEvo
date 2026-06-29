@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "pass": 103,
+    "vme_cells": 43,
+    "vme_rate": 0.0177
+  },
+  "corrected": {
+    "pass": 106,
+    "vme_cells": 42,
+    "vme_rate": 0.0181
+  },
+  "delta_pass": 3,
+  "delta_vme_cells": -1,
+  "pass_gain": 3,
+  "pass_loss": 0,
+  "weight": 0.7,
+  "threshold": 0.65
+}

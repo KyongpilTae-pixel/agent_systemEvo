@@ -1,0 +1,8 @@
+{
+  "auroc_in_domain_trainTest": 0.9151,
+  "auroc_cross_domain_fda": 0.9178,
+  "auroc_model_pred_fda": 0.9466,
+  "n_fda_rows": 152834,
+  "n_fda_brightness_covered": 152834,
+  "n_features": 41
+}

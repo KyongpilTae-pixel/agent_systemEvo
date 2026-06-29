@@ -1,0 +1,606 @@
+{
+  "meta": {
+    "n_agents": 8,
+    "n_tools": 23,
+    "generated_at": "2026-05-27T09:35:21"
+  },
+  "agents": [
+    {
+      "code": "H",
+      "name": "TrainingDataOptimizer",
+      "role": "학습 데이터 큐레이션 — filter/rebalance/clean + retrain 제안",
+      "n_tools": 4
+    },
+    {
+      "code": "A",
+      "name": "ModelCurator",
+      "role": "subset checkpoint 카탈로그 + per-cell AUROC + routing 후보 제안",
+      "n_tools": 2
+    },
+    {
+      "code": "B",
+      "name": "EnsembleDesigner",
+      "role": "N-model 조합 + ensemble 방법(rank/z/prob) 탐색",
+      "n_tools": 2
+    },
+    {
+      "code": "C",
+      "name": "CalibrationSpecialist",
+      "role": "isotonic per-cell / pooled-organism / pooled-drug-class + threshold tuning",
+      "n_tools": 2
+    },
+    {
+      "code": "D",
+      "name": "SIRClinicalEvaluator",
+      "role": "gng→MIC→SIR→FDA pass 판정 + Pareto 지표",
+      "n_tools": 4
+    },
+    {
+      "code": "E",
+      "name": "OverfitSentinel",
+      "role": "recipe transferability 검증 + fragile blacklist",
+      "n_tools": 4
+    },
+    {
+      "code": "F",
+      "name": "DataQualityAuditor",
+      "role": "dataset diff + shifted set 갱신 + 이상치 감지",
+      "n_tools": 2
+    },
+    {
+      "code": "G",
+      "name": "RoutingCoordinator",
+      "role": "agent 후보 종합 + Pareto + 운영 manifest commit",
+      "n_tools": 3
+    }
+  ],
+  "tools": [
+    {
+      "name": "TrainingDataOptimizer__build_parquet",
+      "agent_code": "H",
+      "method": "build_parquet",
+      "description": "curation 적용한 parquet 빌드 (재학습용)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          },
+          "output_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id",
+          "output_path"
+        ]
+      }
+    },
+    {
+      "name": "TrainingDataOptimizer__propose_curations",
+      "agent_code": "H",
+      "method": "propose_curations",
+      "description": "후보 curation recipe 제안 (object_area 필터, 재균형, normalize 등)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "target_drug": {
+            "type": "string"
+          },
+          "target_organism": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "target_drug",
+          "target_organism"
+        ]
+      }
+    },
+    {
+      "name": "TrainingDataOptimizer__recommend_retrain",
+      "agent_code": "H",
+      "method": "recommend_retrain",
+      "description": "retrain 권고 (어느 모델을 어떤 curated dataset으로 재학습?)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    {
+      "name": "TrainingDataOptimizer__simulate",
+      "agent_code": "H",
+      "method": "simulate",
+      "description": "curation recipe 시뮬레이션 (실제 parquet 생성 없이 shift gap 측정)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id"
+        ]
+      }
+    },
+    {
+      "name": "ModelCurator__audit",
+      "agent_code": "A",
+      "method": "audit",
+      "description": "학습된 OrderPickGNG checkpoint scan (신규 모델 자동 감지)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    {
+      "name": "ModelCurator__propose_routing",
+      "agent_code": "A",
+      "method": "propose_routing",
+      "description": "per-cell best model 또는 drug_class routing 제안",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "strategy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "strategy"
+        ]
+      }
+    },
+    {
+      "name": "EnsembleDesigner__apply",
+      "agent_code": "B",
+      "method": "apply",
+      "description": "recipe를 per-row df에 적용 → score 컬럼 추가",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe": {
+            "type": "string"
+          },
+          "per_row_csv": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe",
+          "per_row_csv"
+        ]
+      }
+    },
+    {
+      "name": "EnsembleDesigner__search",
+      "agent_code": "B",
+      "method": "search",
+      "description": "model_pool에서 size 2~max_size 조합 생성 (rank average default)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "model_pool": {
+            "type": "string"
+          },
+          "max_size": {
+            "type": "string"
+          },
+          "top_k": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "model_pool",
+          "max_size",
+          "top_k",
+          "method"
+        ]
+      }
+    },
+    {
+      "name": "CalibrationSpecialist__recommend_calibration",
+      "agent_code": "C",
+      "method": "recommend_calibration",
+      "description": "기존 per-cell isotonic 사용 권고 (within-FDA 검증 우세)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id"
+        ]
+      }
+    },
+    {
+      "name": "CalibrationSpecialist__tune_threshold",
+      "agent_code": "C",
+      "method": "tune_threshold",
+      "description": "threshold sweep (global thresholds: 0.5, 0.65, 0.75, 0.80)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id"
+        ]
+      }
+    },
+    {
+      "name": "SIRClinicalEvaluator__evaluate",
+      "agent_code": "D",
+      "method": "evaluate",
+      "description": "verify_method_sir_pipeline subprocess 호출 → 신규 recipe SIR 평가",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          },
+          "per_conc_csv": {
+            "type": "string"
+          },
+          "gbm_oof_csv": {
+            "type": "string"
+          },
+          "output_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id",
+          "per_conc_csv",
+          "gbm_oof_csv",
+          "output_dir"
+        ]
+      }
+    },
+    {
+      "name": "SIRClinicalEvaluator__evaluate_cached",
+      "agent_code": "D",
+      "method": "evaluate_cached",
+      "description": "기존 cache (baseline / routed) 결과 lookup",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id"
+        ]
+      }
+    },
+    {
+      "name": "SIRClinicalEvaluator__fda_pass_count",
+      "agent_code": "D",
+      "method": "fda_pass_count",
+      "description": "baseline vs routed FDA pass 카운트",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    {
+      "name": "SIRClinicalEvaluator__list_failing_cells",
+      "agent_code": "D",
+      "method": "list_failing_cells",
+      "description": "현재 FAIL인 cells 목록 (default = baseline same_mic)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "source"
+        ]
+      }
+    },
+    {
+      "name": "OverfitSentinel__blacklist_pattern",
+      "agent_code": "E",
+      "method": "blacklist_pattern",
+      "description": "known-fragile 패턴 blacklist 추가",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "pattern_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "pattern_id",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "OverfitSentinel__list_blacklist",
+      "agent_code": "E",
+      "method": "list_blacklist",
+      "description": "현재 blacklist 조회",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    {
+      "name": "OverfitSentinel__validate",
+      "agent_code": "E",
+      "method": "validate",
+      "description": "recipe validation — known-fragile 매칭 (빠른 sanity check)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          },
+          "n_folds": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id",
+          "n_folds"
+        ]
+      }
+    },
+    {
+      "name": "OverfitSentinel__validate_cv",
+      "agent_code": "E",
+      "method": "validate_cv",
+      "description": "실제 5-fold GroupKFold CV — per-row score + gt_gng 필요",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          },
+          "per_row_csv": {
+            "type": "string"
+          },
+          "score_col": {
+            "type": "string"
+          },
+          "n_folds": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id",
+          "per_row_csv",
+          "score_col",
+          "n_folds"
+        ]
+      }
+    },
+    {
+      "name": "DataQualityAuditor__audit",
+      "agent_code": "F",
+      "method": "audit",
+      "description": "baseline state audit (shifted set + bucket 분포)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    {
+      "name": "DataQualityAuditor__refresh_shifted_set",
+      "agent_code": "F",
+      "method": "refresh_shifted_set",
+      "description": "shifted set 새로고침 (compare_datasets_full_traintest 재실행 제안)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    },
+    {
+      "name": "RoutingCoordinator__candidates_for_cell",
+      "agent_code": "G",
+      "method": "candidates_for_cell",
+      "description": "특정 cell에 시도할 후보 변형 목록 (Stage 1 cell-greedy 용)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "organism_group": {
+            "type": "string"
+          },
+          "antimicrobial": {
+            "type": "string"
+          },
+          "model_pool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "organism_group",
+          "antimicrobial",
+          "model_pool"
+        ]
+      }
+    },
+    {
+      "name": "RoutingCoordinator__commit",
+      "agent_code": "G",
+      "method": "commit",
+      "description": "사이클 완료 후 manifest commit (사용자 approve 필요)",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "recipe_id": {
+            "type": "string"
+          },
+          "cycle_id": {
+            "type": "string"
+          },
+          "agent_lineage": {
+            "type": "string"
+          },
+          "validated_metrics": {
+            "type": "string"
+          },
+          "operational_assets": {
+            "type": "string"
+          },
+          "user_approved": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "recipe_id",
+          "cycle_id",
+          "agent_lineage",
+          "validated_metrics",
+          "operational_assets",
+          "user_approved"
+        ]
+      }
+    },
+    {
+      "name": "RoutingCoordinator__consolidate",
+      "agent_code": "G",
+      "method": "consolidate",
+      "description": "Stage 2: cell-local winner들을 클러스터 → 최소 recipe set으로 통합",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "per_cell_winners": {
+            "type": "string"
+          },
+          "max_recipes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "per_cell_winners",
+          "max_recipes"
+        ]
+      }
+    }
+  ]
+}

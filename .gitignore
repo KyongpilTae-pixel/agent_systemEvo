@@ -1,0 +1,31 @@
+# agent_system: 소스(.py/.sh/.md)만 추적. 데이터/결과/가중치(24G) 전부 제외.
+*
+!*/
+!*.py
+!*.sh
+!*.md
+!.gitignore
+!*.json
+!*.yaml
+!*.yml
+# 안전장치: 데이터/결과 강제 제외
+*.parquet
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.html
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+*.png
+*.jpg
+*.jpeg
+*.pkl
+*.joblib
+*.safetensors
+output/
+state/
+__pycache__/

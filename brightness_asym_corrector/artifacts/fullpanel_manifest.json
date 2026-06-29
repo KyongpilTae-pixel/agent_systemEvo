@@ -1,0 +1,46 @@
+{
+  "n_cells": 313,
+  "native_threshold": 0.65,
+  "scope": "asym G-direction brightness applied to Brightness=True cells only",
+  "baseline_is_routed_iso_t65": true,
+  "summary": [
+    {
+      "variant": "baseline",
+      "pass": 103,
+      "vme_cells": 43,
+      "vme_rate": 0.0177,
+      "net_pass": 0,
+      "net_vme_cells": 0
+    },
+    {
+      "variant": "asym_br50",
+      "pass": 104,
+      "vme_cells": 43,
+      "vme_rate": 0.0179,
+      "net_pass": 1,
+      "net_vme_cells": 0,
+      "pass_gain": 1,
+      "pass_loss": 0
+    },
+    {
+      "variant": "asym_br70",
+      "pass": 106,
+      "vme_cells": 42,
+      "vme_rate": 0.0181,
+      "net_pass": 3,
+      "net_vme_cells": -1,
+      "pass_gain": 3,
+      "pass_loss": 0
+    },
+    {
+      "variant": "brightness_only",
+      "pass": 95,
+      "vme_cells": 50,
+      "vme_rate": 0.0217,
+      "net_pass": -8,
+      "net_vme_cells": 7,
+      "pass_gain": 1,
+      "pass_loss": 9
+    }
+  ]
+}

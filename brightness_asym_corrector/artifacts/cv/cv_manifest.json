@@ -1,0 +1,48 @@
+{
+  "design": "GroupKFold(sample_id) OOF isotonic; brightness GBM is out-of-domain (train CSV), so OOF targets the only FDA in-sample step (per-cell isotonic).",
+  "folds": 5,
+  "w_reference": 0.7,
+  "results": {
+    "baseline_insample": {
+      "pass": 103,
+      "vme_cells": 43,
+      "vme_rate": 0.0177
+    },
+    "corrected_insample_w0.7": {
+      "pass": 106,
+      "vme_cells": 42,
+      "vme_rate": 0.0181
+    },
+    "baseline_oof": {
+      "pass": 87,
+      "vme_cells": 54,
+      "vme_rate": 0.0215
+    },
+    "corrected_oof_w0.5": {
+      "pass": 86,
+      "vme_cells": 56,
+      "vme_rate": 0.0228
+    },
+    "corrected_oof_w0.7": {
+      "pass": 86,
+      "vme_cells": 56,
+      "vme_rate": 0.0232
+    },
+    "corrected_oof_w1.0": {
+      "pass": 83,
+      "vme_cells": 58,
+      "vme_rate": 0.0239
+    }
+  },
+  "insample_delta_pass": 3,
+  "oof_delta_pass": -1,
+  "oof_gain_cells": 0,
+  "oof_loss_cells": 1,
+  "oof_gain_list": [],
+  "oof_loss_list": [
+    {
+      "organism_group": "Morganella morganii",
+      "antimicrobial": "ETP"
+    }
+  ]
+}

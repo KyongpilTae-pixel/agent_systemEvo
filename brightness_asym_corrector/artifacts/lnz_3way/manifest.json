@@ -1,0 +1,82 @@
+{
+  "n_lnz_cells": 8,
+  "pass": {
+    "baseline": 4,
+    "our_mapping": 5,
+    "genus_mapping": 4
+  },
+  "rows": [
+    {
+      "organism_group": "Enterococcus faecium",
+      "model_baseline": "same_mic",
+      "fail_baseline": "EA,ME",
+      "model_our": "early_stop",
+      "fail_our": "PASS",
+      "model_genus": "beta_lactam",
+      "fail_genus": "EA,CA,ME"
+    },
+    {
+      "organism_group": "Staphylococcus Coagulase-negative",
+      "model_baseline": "same_mic",
+      "fail_baseline": "PASS",
+      "model_our": "beta_lactam",
+      "fail_our": "PASS",
+      "model_genus": "object_area_045~08",
+      "fail_genus": "PASS"
+    },
+    {
+      "organism_group": "Enterococcus faecalis",
+      "model_baseline": "same_mic",
+      "fail_baseline": "PASS",
+      "model_our": "object_area_045~08",
+      "fail_our": "PASS",
+      "model_genus": "beta_lactam",
+      "fail_genus": "PASS"
+    },
+    {
+      "organism_group": "Staphylococcus aureus",
+      "model_baseline": "same_mic",
+      "fail_baseline": "EA,CA,VME,ME",
+      "model_our": "beta_lactam",
+      "fail_our": "EA,CA,ME",
+      "model_genus": "object_area_045~08",
+      "fail_genus": "EA,CA,ME"
+    },
+    {
+      "organism_group": "Staphylococcus lugdunensis",
+      "model_baseline": "same_mic",
+      "fail_baseline": "PASS",
+      "model_our": "early_stop",
+      "fail_our": "PASS",
+      "model_genus": "object_area_045~08",
+      "fail_genus": "PASS"
+    },
+    {
+      "organism_group": "Enterococcus gallinarum",
+      "model_baseline": "same_mic",
+      "fail_baseline": "EA,CA,ME",
+      "model_our": "beta_lactam",
+      "fail_our": "ME",
+      "model_genus": "beta_lactam",
+      "fail_genus": "ME"
+    },
+    {
+      "organism_group": "Enterococcus casseliflavus",
+      "model_baseline": "same_mic",
+      "fail_baseline": "EA,ME",
+      "model_our": "beta_lactam",
+      "fail_our": "EA,CA,ME",
+      "model_genus": "beta_lactam",
+      "fail_genus": "EA,CA,ME"
+    },
+    {
+      "organism_group": "Enterococcus avium",
+      "model_baseline": "same_mic",
+      "fail_baseline": "PASS",
+      "model_our": "object_area_all",
+      "fail_our": "PASS",
+      "model_genus": "beta_lactam",
+      "fail_genus": "PASS"
+    }
+  ]
+}

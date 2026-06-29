@@ -1,0 +1,17 @@
+{
+  "our_routing": {
+    "pass": 103,
+    "vme_cells": 43,
+    "vme_rate": 0.0177
+  },
+  "genus_routing": {
+    "pass": 95,
+    "vme_cells": 42,
+    "vme_rate": 0.0155
+  },
+  "delta_pass": -8,
+  "delta_vme": -1,
+  "pass_gain": 8,
+  "pass_loss": 16,
+  "evo_cells_covered": 295
+}

@@ -1,0 +1,8 @@
+{
+  "signal": "object_area",
+  "auroc_in_domain": 0.9636,
+  "auroc_cross_domain_fda": 0.9355,
+  "n_features": 41,
+  "n_train": 316528,
+  "n_cross": 152834
+}
