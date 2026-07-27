@@ -47,7 +47,18 @@ bash agent_system/technical_error/run.sh
 3. 체크포인트 4개를 순서대로 돌며 각 컬럼(boolean, logit>0)을 채우고 중간 저장(`output/temp.csv`).
 4. 완료 시 `output/Reproducibility_technical_error.csv`.
 
-## 학습셋
+## 학습셋 · 재학습 (이관 완료 2026-07-27)
 
-이 추론 패키지엔 미포함. 원본 학습 데이터는 `/home/junhyeok/anomaly/`(~14GB, 구/중간본 혼재).
-실제 4개 체크포인트를 만든 학습셋 특정 후 별도 이관 예정(TODO).
+**라벨 CSV**(human 기술오류 주석 + train/test split) = `/home/kptae/data/technical_error/trainset/` (md5 검증 복사):
+- `0909_train_test_qc.csv` (qc 도메인) · `0910_train_test_drast.csv` (drast 도메인)
+- `0915_bubble_qc_train.csv` · `0917_bubble_drast_train.csv` (bubble 도메인별)
+- `0908_train_test.csv` · `0728_traintest.csv` (4-label anomaly)
+- 추정 매핑: film/bubble_qc ← qc CSV, film/bubble_drast ← drast CSV. **정확 매핑은 원저자 확인 필요.**
+
+**이미지**: 라벨 CSV 의 `safetensors` 컬럼이 공용 중앙 저장소 `/data/dRAST30_safetensors/`(우리 MIC 파이프라인과 동일 원본)를
+가리킴 → **복사 안 함, 제자리 참조**.
+
+**재학습 코드**: `train/` (train_film.py · train_anomaly.py[4-label] · train_anomaly_4.py + configs/).
+config 는 로컬 `train/configs/` 에서 읽도록 수정, df_path/output_path 는 우리 관리 경로로 교체.
+⚠ 이 스크립트들은 junhyeok **실험 중간 상태 스냅샷**(resume·per-epoch load 포함) — 외부 체크포인트 로드는 주석 처리했고,
+clean 재학습은 df_path/에폭 범위 조정 후 검증 필요(4개 체크포인트 정확 재현은 별도 검증 TODO).

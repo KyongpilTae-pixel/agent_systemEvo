@@ -1,0 +1,10 @@
+# 재학습 config (우리쪽 관리본). 학습셋=우리 관리 라벨 CSV, 이미지=공용 /data/dRAST30_safetensors.
+# ※ df_path 를 바꿔 4종(film/bubble × qc/drast) 각각 학습:
+#   film/bubble_qc  → trainset/0909_train_test_qc.csv (또는 0915_bubble_qc_train.csv)
+#   film/bubble_drast → trainset/0910_train_test_drast.csv (또는 0917_bubble_drast_train.csv)
+time_len: 6
+output_path: '/home/kptae/data/technical_error/trainout/film_drast'
+df_path: '/home/kptae/data/technical_error/trainset/0917_bubble_drast_train.csv'
+port: "12345"
+batch_size: 32
+num_epoch: 100
