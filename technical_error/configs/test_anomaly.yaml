@@ -1,0 +1,8 @@
+# technical_error 추론 설정 (우리쪽 관리본, 2026-07-27 이관).
+# ★ predict.py 가 실제로 쓰는 키는 time_len, port 둘뿐.
+#   입력/출력/체크포인트 경로는 predict.py 의 DATA_DIR(=/home/kptae/data/technical_error)에서 결정.
+#   (원본 junhyeok config 의 df_path/output_path 는 predict.py 미사용 — 제거)
+time_len: 6          # well 당 시점 프레임 = time_len+1 (t0~t6 = 7장)
+port: "12355"        # DDP master_port
+batch_size: 32       # (predict.py 는 실제 128 사용, 참고용)
+num_epoch: 100       # (학습용, 추론 미사용)
