@@ -12,6 +12,10 @@
 ⚠`bmd_mic_order` 가 d170 에 없다. `bmd_mic` 와 농도 배열로 **계산**한다.
   규약은 앱과 같다 — 0=최저농도 · 14=전 농도 성장(off-scale `>`/`>=`).
 
+★TE(기술오류) 점수를 **격자 행마다** 실어 보낸다 — `newmodel/data/te25_panel_scores.csv`
+  (없으면 조용히 건너뛴다). 행 순서는 격자와 같다: control(농도 오름차순) → 약제 농도(오름차순).
+  라벨러가 "이 칸이 이상한데 기포인가?" 를 화면에서 바로 확인하게 하려는 것이다.
+
 서브셋 = 사이드바에서 "이것만 보기" 로 거르는 이름표. `subsets/<id>.csv`
   (`project_id,sample_id,antimicrobial`). 패널 단위이며 여러 개가 겹칠 수 있다.
 
@@ -96,6 +100,20 @@ def main():
     ctl = ctl.sort_values('c')
     ctl_by = {k: g for k, g in ctl.groupby('sk')}
 
+    # ── TE25 행별 점수(있으면) ──
+    te_map = {}
+    p_te = f'{D25}/newmodel/data/te25_panel_scores.csv'
+    if os.path.exists(p_te):
+        T = pd.read_csv(p_te)
+        T['k'] = (T.project_id.astype(str) + '|' + T.sample_id.astype(str) + '|'
+                  + T.antimicrobial.astype(str) + '|'
+                  + pd.to_numeric(T.c, errors='coerce').map(lambda x: f'{x:g}'))
+        te_map = {r.k: (round(float(r.bubble), 3), round(float(r.film), 3))
+                  for r in T.itertuples()}
+        print(f'[src25] TE 점수 {len(te_map):,} 웰', flush=True)
+    else:
+        print('[src25] ⚠TE 점수 없음 — infer_te25_panels 를 먼저 돌린다', flush=True)
+
     rows = []
     miss_img = 0
     for pk, g in d[d.pk.isin(keep)].groupby('pk'):
@@ -106,13 +124,19 @@ def main():
         sk = f'{r0.project_id}|{r0.sample_id}'
         cg = ctl_by.get(sk)
         concs = [f'{x:g}' for x in g.c.tolist()]
-        grid = []
+        grid, te_rows = [], []
+
+        def _te(am, cv):
+            return te_map.get(f'{r0.project_id}|{r0.sample_id}|{am}|{cv:g}')
+
         if cg is not None:
             for _, cr in cg.iterrows():
                 grid.append(wp_frames(cr.home_dir, cr.file_name, NFRAME))
+                te_rows.append(_te('Cont', cr.c))
         ctl_len = len(grid)
         for _, wr in g.iterrows():
             grid.append(wp_frames(wr.home_dir, wr.file_name, NFRAME))
+            te_rows.append(_te(str(r0.antimicrobial), wr.c))
         if any(not any(f) for f in grid):
             miss_img += 1
         rows.append(dict(
@@ -124,6 +148,7 @@ def main():
             bmd_mic='' if pd.isna(r0.bmd_mic) else str(r0.bmd_mic),
             bmd_mic_order=mic_order(r0.bmd_mic, concs),
             png_frames=json.dumps(grid),
+            te_rows=json.dumps(te_rows),
             sample_dir_id=str(r0.sample_dir_id),
         ))
     R = pd.DataFrame(rows)

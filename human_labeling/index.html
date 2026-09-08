@@ -220,6 +220,14 @@
     border: 1px solid var(--bmd); border-radius: 6px; padding: 2px 8px;
   }
   #bmdToggle.on { color: var(--bmd); border-color: var(--bmd); }
+  /* ★TE(기술오류) 배지 — 행 라벨 옆. 모델이 버블/필름으로 본 정도.
+     라벨러가 "이 칸이 이상한데 기포인가?" 를 화면에서 바로 확인하게 한다. */
+  .te-tag { display:inline-block; font-size:10px; font-weight:700; line-height:1.5;
+    padding:0 4px; border-radius:4px; margin-right:4px; vertical-align:middle;
+    border:1px solid transparent; cursor:help; }
+  .te-tag.hi  { background:#fde8e8; color:#b42318; border-color:#f0a9a9; }
+  .te-tag.mid { background:#fff4e0; color:#a15c00; border-color:#f0cf9a; }
+  tr.te-row .row-conc { text-decoration: underline dotted #b42318 2px; }
   .bmd-tag {
     display: none; font-size: 10px; font-weight: 700; color: var(--bmd);
     border: 1px solid var(--bmd); border-radius: 4px; padding: 0 4px; margin-right: 6px;
@@ -564,6 +572,25 @@ function setSaveState(d) {
   $('#deleteBtn').disabled = !d.choice;
 }
 
+/** TE 점수 -> 배지. 작동점은 검증셋에서 잡은 값(bubble 0.41 / film 0.31)을 쓰고,
+ *  그 아래 0.15 까지는 옅은 색으로 "약한 신호"만 표시한다. 판단은 사람이 한다. */
+const TE_TH = { bubble: 0.41, film: 0.31 }, TE_LOW = 0.15;
+function teTag(te) {
+  if (!te) return { html: '', hit: false };
+  const parts = [];
+  let hit = false;
+  for (const k of ['bubble', 'film']) {
+    const v = te[k];
+    if (v == null || v < TE_LOW) continue;
+    const strong = v >= TE_TH[k];
+    if (strong) hit = true;
+    const name = k === 'bubble' ? '기포' : '필름';
+    parts.push(`<span class="te-tag ${strong ? 'hi' : 'mid'}" title="TE 모델 ${name} ${v.toFixed(3)}` +
+               ` (작동점 ${TE_TH[k]})">${name} ${v.toFixed(2)}</span>`);
+  }
+  return { html: parts.join(''), hit };
+}
+
 function renderGrid(d) {
   const canvas = $('#canvas');
   const T = d.time_len;
@@ -574,9 +601,11 @@ function renderGrid(d) {
 
   d.rows.forEach((row, r) => {
     const isBmd = !row.is_control && d.bmd_choice === 'c' + row.conc_index;
-    html += `<tr${isBmd ? ' class="bmd-row"' : ''}>`;
+    const te = teTag(row.te);
+    const cls = [isBmd ? 'bmd-row' : '', te.hit ? 'te-row' : ''].filter(Boolean).join(' ');
+    html += `<tr${cls ? ` class="${cls}"` : ''}>`;
     html += `<td class="row-conc${row.is_control ? ' cont' : ''}">` +
-            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + `${row.label}</td>`;
+            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + te.html + `${row.label}</td>`;
     row.cells.forEach((src, t) => {
       html += `<td class="cell"><img loading="lazy" src="${src}" data-r="${r}" data-t="${t}"></td>`;
     });

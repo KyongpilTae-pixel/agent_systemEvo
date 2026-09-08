@@ -51,6 +51,7 @@ IMG_CACHE_CONTROL = "public, max-age=31536000, immutable"
 SOURCES = [
     {
         "id": "fda_clinical",
+        "enabled": False,   # ★3.0 — 지금은 감춤(SHOW_30=1 로 되살린다)
         "label": "FDA_Clinical",
         "parquet": "/home/kptae/data/allinfo/new_fda2023/"
         "fda_clinical_MEV_truncation_20260522_exceptGF,JinhaTE_df.parquet",
@@ -59,6 +60,7 @@ SOURCES = [
     },
     {
         "id": "reproducibility",
+        "enabled": False,   # ★3.0 — 지금은 감춤(SHOW_30=1 로 되살린다)
         "label": "Reproducibility",
         "parquet": "/home/kptae/data/allinfo/analytical/"
         "FDA_Analytical_reproducibility_exceptGN26_df_260624.parquet",
@@ -77,6 +79,7 @@ SOURCES = [
     },
     {
         "id": "sample_stability",
+        "enabled": False,   # ★3.0 — 지금은 감춤(SHOW_30=1 로 되살린다)
         "label": "Sample_Stability",
         "parquet": "/home/kptae/data/allinfo/analytical/"
         "FDA_Analytical_sample_stability_df_260723_DelOutlier_with_BMD.parquet",
@@ -84,6 +87,13 @@ SOURCES = [
         "FDA_Analytical_sample_stability_allInfo_new_260723.csv",
     },
 ]
+
+# ★어떤 소스를 띄울지. 기본은 2.5 만 — 지금 검토 대상이 2.5 d170 뿐이라
+#   3.0 38,832건이 섞이면 트리가 묻힌다(2.5 는 599건). 데이터는 지우지 않고 감추기만 한다.
+#   되살리기: SHOW_30=1 python app.py
+SHOW_30 = os.environ.get("SHOW_30", "0").strip().lower() in ("1", "true", "yes", "y")
+SOURCES = [s for s in SOURCES if s.get("enabled", True) or SHOW_30]
+
 
 # BMD를 화면에 표시하지 않을 약제.
 # bmd_mic_order가 임의값(0/14)으로만 채워져 있고 bmd_mic도 POS/NEG/ND 같은
@@ -270,9 +280,12 @@ def load_samples() -> list[dict]:
                 path = ""
                 png_frames = json.loads(row["png_frames"])
                 control_len = int(row["control_len"])
+                # ★TE(기술오류) 행별 점수 [bubble, film]. 없으면 None.
+                te_rows = json.loads(row["te_rows"]) if "te_rows" in row and row["te_rows"] else None
             else:
                 path = str(row["image_safetensors_path"])
                 png_frames = None
+                te_rows = None
                 m = re.search(r"_(\d+)control", os.path.basename(path))
                 control_len = int(m.group(1)) if m else 1
             sample_id = str(row["sample_id"])
@@ -306,6 +319,7 @@ def load_samples() -> list[dict]:
                     "path": path,
                     "loader": loader,
                     "png_frames": png_frames,
+                    "te_rows": te_rows,
                     "control_len": control_len,
                     "key": key,
                     "subsets": sorted(
@@ -483,8 +497,13 @@ def ensure_cells(sample: dict) -> dict:
         cells = [
             f"/static/cells/{sample['key']}/r{row}_t{col}.png?v={ver}" for col in range(time_len)
         ]
+        te = None
+        tr = sample.get("te_rows")
+        if tr and row < len(tr) and tr[row]:
+            te = {"bubble": tr[row][0], "film": tr[row][1]}
         rows.append(
-            {"label": label, "is_control": is_control, "conc_index": conc_index, "cells": cells}
+            {"label": label, "is_control": is_control, "conc_index": conc_index,
+             "cells": cells, "te": te}
         )
 
     return {"time_len": time_len, "rows": rows}
