@@ -29,3 +29,10 @@
 output/
 state/
 __pycache__/
+
+# human_labeling — 라벨 산출물·로그·캐시
+# ★index.html 은 산출물이 아니라 UI 소스다. 위 *.html 규칙의 예외로 되살린다.
+!human_labeling/index.html
+human_labeling/image_mic_labels.csv
+human_labeling/*.log
+human_labeling/__pycache__/

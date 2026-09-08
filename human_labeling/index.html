@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Image MIC Labeling</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel2: #1e222b;
+    --border: #2b303b;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --ok: #34c759;
+    --ok-dim: #1f7a3a;
+    --warn: #ffab00;
+    --bmd: #c084fc;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden;
+  }
+
+  /* ---------- Sidebar ---------- */
+  #sidebar {
+    width: var(--sidebar-w, 300px); flex: 0 0 var(--sidebar-w, 300px); background: var(--panel);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow: hidden; transition: width .18s ease, flex-basis .18s ease;
+  }
+  body.sidebar-collapsed #sidebar {
+    width: 0; flex-basis: 0; border-right: none;
+  }
+  /* 드래그로 사이드바 폭 조절 */
+  #resizer {
+    flex: 0 0 5px; margin-left: -3px; margin-right: -2px; z-index: 5;
+    cursor: col-resize; background: transparent;
+  }
+  #resizer:hover, body.resizing #resizer { background: var(--accent); }
+  body.sidebar-collapsed #resizer { display: none; }
+  /* 드래그 중엔 애니메이션/텍스트 선택 끄기 */
+  body.resizing { user-select: none; cursor: col-resize; }
+  body.resizing #sidebar { transition: none; }
+  #sidebar .head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  #sidebar .head h1 { font-size: 15px; margin: 0 0 10px; letter-spacing: .3px; }
+  .progress-wrap { font-size: 12px; color: var(--muted); }
+  .progress-bar { height: 7px; background: var(--panel2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; width: 0%; background: var(--ok); transition: width .25s ease; }
+  /* 그룹핑 순서 전환 (약제 우선 / 균종 우선) */
+  #grouping { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+  #grouping .lb { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
+  #grouping .segs { display: flex; flex: 1; gap: 4px; }
+  #grouping .seg {
+    flex: 1; background: var(--panel2); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 7px; padding: 4px 6px; font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
+  #grouping .seg:hover { border-color: var(--accent); }
+  #grouping .seg.on { background: #23324d; border-color: var(--accent); color: var(--text); }
+
+  #search {
+    margin: 10px 14px; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; font-size: 13px; outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  #list { flex: 1; overflow-y: auto; padding: 4px 8px 16px; }
+  .item {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+    cursor: pointer; font-size: 13px; color: var(--text); border: 1px solid transparent;
+  }
+  .item:hover { background: var(--panel2); }
+  .item.active { background: #23324d; border-color: var(--accent); }
+  .item .dot { width: 9px; height: 9px; border-radius: 50%; background: #3a3f4b; flex: 0 0 9px; }
+  .item.done .dot { background: var(--ok); }
+  .item .sid { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .mic { font-size: 11px; color: var(--ok); font-variant-numeric: tabular-nums; }
+  .item .badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; flex: 0 0 auto; }
+  .item .badge.amb { background: rgba(255,171,0,.18); color: var(--warn); }
+  .item .badge.te { background: rgba(255,90,90,.18); color: #ff5a5a; }
+
+  /* ---------- Folder tree ---------- */
+  /* 폴더 헤더는 스크롤해도 위에 붙어 있게(sticky). 깊이별로 --node-h 만큼 아래에 쌓인다. */
+  :root { --node-h: 28px; }
+  .node {
+    display: flex; align-items: center; gap: 6px; height: var(--node-h); padding: 0 8px;
+    border-radius: 7px; cursor: pointer; font-size: 13px; user-select: none; color: var(--text);
+    position: sticky; background: var(--panel);
+  }
+  .node:hover { background: var(--panel2); }
+  .node .chev {
+    flex: 0 0 12px; font-size: 10px; color: var(--muted); transition: transform .12s ease;
+    display: inline-block; text-align: center;
+  }
+  .node.open .chev { transform: rotate(90deg); }
+  .node .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node .cnt {
+    font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums;
+    background: var(--panel2); border-radius: 10px; padding: 1px 7px; flex: 0 0 auto;
+  }
+  .node.full .cnt { color: var(--ok); background: rgba(52,199,89,.14); }
+  /* d0 FDA_Clinical/Reproducibility · d1~d3 은 그룹핑 순서 설정에 따라 달라진다 */
+  /* 상위 폴더가 항상 위에 오도록 top 오프셋과 z-index를 깊이 순으로 준다 */
+  .node.d0 { font-weight: 600; color: var(--accent); top: 0;                    z-index: 4; }
+  .node.d1 { font-weight: 600;                       top: var(--node-h);        z-index: 3; }
+  .node.d2 { font-weight: 500;                       top: calc(var(--node-h)*2); z-index: 2; }
+  .node.d3 { color: var(--muted); font-size: 12.5px; top: calc(var(--node-h)*3); z-index: 1; }
+  .children { margin-left: 9px; border-left: 1px solid var(--border); padding-left: 2px; }
+  .children .item { padding-left: 10px; }
+
+  /* ---------- Main ---------- */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar {
+    display: flex; align-items: center; gap: 14px; padding: 12px 20px;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  #title { font-size: 16px; font-weight: 600; }
+  #title .sep { color: var(--muted); margin: 0 8px; font-weight: 400; }
+  #title .amr { color: var(--accent); }
+  #flags { display: flex; gap: 8px; margin-left: 4px; }
+  .flag {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted);
+    padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; user-select: none;
+  }
+  .flag input { width: 14px; height: 14px; cursor: pointer; margin: 0; }
+  .flag.amb input { accent-color: var(--warn); }
+  .flag.te input { accent-color: #ff5a5a; }
+  .flag.amb.on { color: var(--warn); border-color: var(--warn); }
+  .flag.te.on { color: #ff5a5a; border-color: #ff5a5a; }
+  .spacer { flex: 1; }
+  .btn {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn:disabled:hover { border-color: var(--border); }
+  .btn.icon { padding: 7px 10px; font-size: 15px; line-height: 1; }
+  .btn.danger:hover:not(:disabled) { border-color: #ff5a5a; color: #ff5a5a; }
+
+  #toast {
+    position: fixed; bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--panel2); color: var(--text); border: 1px solid var(--accent);
+    padding: 11px 20px; border-radius: 10px; font-size: 14px; font-weight: 500;
+    opacity: 0; pointer-events: none; z-index: 1000;
+    box-shadow: 0 6px 24px rgba(0,0,0,.4);
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #saveState { font-size: 12px; color: var(--muted); min-width: 90px; text-align: right; }
+  #saveState.saved { color: var(--ok); }
+  .zoom { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+
+  #canvas { flex: 1; overflow: auto; padding: 20px 24px 60px; }
+  #msg { color: var(--muted); font-size: 14px; }
+  #err { color: var(--warn); font-size: 14px; white-space: pre-wrap; }
+
+  table.grid { border-collapse: collapse; }
+  table.grid th, table.grid td { padding: 0; text-align: center; }
+  .col-time { font-size: 12px; color: var(--muted); padding: 0 0 8px !important; font-weight: 500; }
+  .row-conc {
+    font-size: 12px; color: var(--text); padding-right: 10px !important; text-align: right;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .row-conc.cont { color: var(--muted); }
+  .cell { padding: 2px !important; }
+  .cell img {
+    display: block; border-radius: 3px; background: #000; image-rendering: auto;
+    width: var(--cell, 150px); height: var(--cell, 150px);
+  }
+  .ag-spacer { height: calc(var(--cell, 150px) + 4px); }
+  .radio-head { font-size: 12px; color: var(--muted); padding: 0 0 8px 12px !important; }
+  .radio-cell { padding-left: 12px !important; }
+  .radio-cell label {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border);
+    background: var(--panel2);
+  }
+  .radio-cell input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .radio-cell label:hover { border-color: var(--accent); }
+  .radio-cell.checked label { background: #23324d; border-color: var(--accent); }
+
+  .kbd { font-size: 11px; color: var(--muted); margin-left: 6px; }
+
+  /* ---------- 셀 확대 보기 (라이트박스) ---------- */
+  .cell img { cursor: zoom-in; }
+  #lightbox {
+    position: fixed; inset: 0; z-index: 2000; display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: rgba(0,0,0,.82); backdrop-filter: blur(2px);
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    width: min(84vmin, 720px); height: min(84vmin, 720px);
+    border-radius: 6px; background: #000; cursor: zoom-out;
+    box-shadow: 0 10px 50px rgba(0,0,0,.6);
+  }
+  #lbCap {
+    display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px;
+  }
+  #lbCap .conc { font-weight: 600; font-variant-numeric: tabular-nums; }
+  #lbCap .conc.cont { color: var(--muted); }
+  #lbCap .time { color: var(--muted); }
+  #lbCap .hint { color: var(--muted); font-size: 12px; border-left: 1px solid var(--border); padding-left: 10px; }
+
+  /* ---------- BMD MIC 토글 (기본 감춤 — 라벨링 편향을 막기 위해) ---------- */
+  #bmdBox { display: none; align-items: center; gap: 6px; font-size: 13px; }
+  body.show-bmd #bmdBox { display: inline-flex; }
+  #bmdBox .lb { font-size: 11px; color: var(--muted); }
+  #bmdVal {
+    color: var(--bmd); font-weight: 600; font-variant-numeric: tabular-nums;
+    border: 1px solid var(--bmd); border-radius: 6px; padding: 2px 8px;
+  }
+  #bmdToggle.on { color: var(--bmd); border-color: var(--bmd); }
+  .bmd-tag {
+    display: none; font-size: 10px; font-weight: 700; color: var(--bmd);
+    border: 1px solid var(--bmd); border-radius: 4px; padding: 0 4px; margin-right: 6px;
+    vertical-align: middle;
+  }
+  body.show-bmd .bmd-tag { display: inline-block; }
+  body.show-bmd tr.bmd-row .row-conc { color: var(--bmd); font-weight: 600; }
+</style>
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="head">
+      <h1>Image MIC Labeling</h1>
+      <div class="progress-wrap">
+        <span id="progressText">0 / 0 완료</span>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+      <div id="grouping" title="사이드바 그룹핑 순서 (단축키 g)">
+        <span class="lb">그룹</span>
+        <div class="segs">
+          <button class="seg" data-order="amr">약제 → 균종</button>
+          <button class="seg" data-order="org">균종 → 약제</button>
+        </div>
+      </div>
+    </div>
+    <input id="search" type="text" placeholder="sample_id 검색…" autocomplete="off" />
+    <div id="list"></div>
+  </aside>
+
+  <div id="resizer" title="드래그하여 목록 폭 조절 (더블클릭: 초기화)"></div>
+
+  <section id="main">
+    <div id="topbar">
+      <button class="btn icon" id="sidebarToggle" title="목록 접기/펴기">☰</button>
+      <div id="title">—</div>
+      <div id="flags">
+        <label class="flag amb"><input type="checkbox" id="flagAmbiguous"> Ambiguous</label>
+        <label class="flag te"><input type="checkbox" id="flagTE"> TE</label>
+      </div>
+      <div id="bmdBox"><span class="lb">BMD</span><span id="bmdVal">—</span></div>
+      <div class="spacer"></div>
+      <button class="btn" id="bmdToggle" title="BMD MIC 표시/감춤">BMD MIC<span class="kbd">b</span></button>
+      <div class="zoom">
+        크기 <input id="zoom" type="range" min="60" max="150" value="150" />
+      </div>
+      <button class="btn" id="prevBtn">← 이전<span class="kbd">a</span></button>
+      <button class="btn" id="nextBtn">다음 →<span class="kbd">d</span></button>
+      <button class="btn danger" id="deleteBtn" title="이 샘플의 저장된 MIC 라벨 삭제" disabled>라벨 삭제</button>
+      <div id="saveState"></div>
+    </div>
+    <div id="canvas">
+      <div id="msg">왼쪽 목록에서 샘플을 선택하세요.</div>
+    </div>
+  </section>
+
+  <div id="lightbox">
+    <img id="lbImg" alt="" />
+    <div id="lbCap">
+      <span class="conc" id="lbConc"></span>
+      <span class="time" id="lbTime"></span>
+      <span class="hint">방향키 이동 · Esc 닫기</span>
+    </div>
+  </div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+let SAMPLES = [];
+let curIdx = null;
+let curData = null;
+
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+// ---------- Sidebar ----------
+async function loadList() {
+  const d = await fetchJSON('/api/samples');
+  SAMPLES = d.samples;
+  renderProgress(d.done, d.total);
+  renderList();
+}
+
+function renderProgress(done, total) {
+  $('#progressText').textContent = `${done} / ${total} 완료`;
+  $('#progressFill').style.width = total ? (100 * done / total) + '%' : '0%';
+}
+
+// ---------- 그룹핑 순서 ----------
+// 최상위(FDA_Clinical|Reproducibility)는 고정이고, 그 아래 3단계 순서만 바꾼다.
+// microbial_id 는 organism_group 의 하위 분류라 항상 바로 뒤에 붙인다.
+const GROUP_ORDERS = {
+  amr: ['antimicrobial', 'organism_group', 'microbial_id'],
+  org: ['organism_group', 'microbial_id', 'antimicrobial'],
+};
+let groupOrder = localStorage.getItem('groupOrder');
+if (!GROUP_ORDERS[groupOrder]) groupOrder = 'amr';
+
+/** 샘플이 놓일 트리 경로. 서버가 준 s.group 대신 현재 순서로 조립한다. */
+function groupPath(s) {
+  return [s.src_label, ...GROUP_ORDERS[groupOrder].map(k => s[k])];
+}
+
+function setGroupOrder(order) {
+  if (!GROUP_ORDERS[order] || order === groupOrder) return;
+  groupOrder = order;
+  localStorage.setItem('groupOrder', order);
+  applyGroupOrder();
+  // 순서가 바뀌면 경로가 달라지므로, 보고 있던 샘플이 계속 보이도록 다시 펼친다
+  expandTo(SAMPLES.find(x => x.idx === curIdx));
+  renderList();
+  const active = $(`.item[data-idx="${curIdx}"]`);
+  if (active) active.scrollIntoView({ block: 'center' });
+}
+
+function applyGroupOrder() {
+  document.querySelectorAll('#grouping .seg').forEach(b => {
+    b.classList.toggle('on', b.dataset.order === groupOrder);
+  });
+}
+
+// 폴더 트리: [FDA_Clinical|Reproducibility, ...groupOrder]
+const EXPANDED = new Set();
+
+function buildTree(samples) {
+  const root = { children: new Map(), samples: [] };
+  for (const s of samples) {
+    const path0 = groupPath(s);
+    let node = root, path = '';
+    for (let depth = 0; depth < path0.length; depth++) {
+      const name = path0[depth];
+      path = path ? path + ' / ' + name : name;
+      if (!node.children.has(name)) {
+        node.children.set(name, {
+          name, path, depth, children: new Map(), samples: [], total: 0, done: 0
+        });
+      }
+      node = node.children.get(name);
+      node.total++;
+      if (s.labeled) node.done++;
+    }
+    node.samples.push(s);
+  }
+  return root;
+}
+
+// 순서를 바꾸면 폴더가 나타나는 차례가 샘플 순서에 끌려가므로, 항상 이름순으로 고정한다.
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+const sortedChildren = (node) => [...node.children.values()].sort(byName);
+
+function makeItem(s) {
+  const el = document.createElement('div');
+  el.className = 'item' + (s.labeled ? ' done' : '') + (s.idx === curIdx ? ' active' : '');
+  el.dataset.idx = s.idx;
+  const badges =
+    (s.ambiguous ? '<span class="badge amb">AMB</span>' : '') +
+    (s.TE ? '<span class="badge te">TE</span>' : '');
+  el.innerHTML = `<span class="dot"></span><span class="sid">${s.sample_id}</span>` + badges +
+                 (s.labeled ? `<span class="mic">${s.human_mic}</span>` : '');
+  el.onclick = () => selectSample(s.idx);
+  return el;
+}
+
+function renderNode(node, parentEl, forceOpen) {
+  const open = forceOpen || EXPANDED.has(node.path);
+  const head = document.createElement('div');
+  head.className = `node d${node.depth}` + (open ? ' open' : '') +
+                   (node.total && node.done === node.total ? ' full' : '');
+  head.innerHTML = `<span class="chev">▶</span><span class="nm">${node.name}</span>` +
+                   `<span class="cnt">${node.done}/${node.total}</span>`;
+  head.onclick = () => {
+    if (EXPANDED.has(node.path)) EXPANDED.delete(node.path);
+    else EXPANDED.add(node.path);
+    renderList();
+  };
+  parentEl.appendChild(head);
+
+  // 접힌 노드는 DOM에 넣지 않는다 (a/d 이동이 숨겨진 샘플로 넘어가지 않도록)
+  if (!open) return;
+  const kids = document.createElement('div');
+  kids.className = 'children open';
+  for (const child of sortedChildren(node)) renderNode(child, kids, forceOpen);
+  for (const s of node.samples) kids.appendChild(makeItem(s));
+  parentEl.appendChild(kids);
+}
+
+function renderList() {
+  const q = $('#search').value.trim().toLowerCase();
+  const shown = q ? SAMPLES.filter(s => s.sample_id.toLowerCase().includes(q)) : SAMPLES;
+  const list = $('#list');
+  list.innerHTML = '';
+  const root = buildTree(shown);
+  for (const child of sortedChildren(root)) renderNode(child, list, !!q);
+}
+
+/** 해당 샘플이 보이도록 상위 폴더를 모두 펼친다. */
+function expandTo(s) {
+  if (!s) return;
+  let path = '';
+  for (const name of groupPath(s)) {
+    path = path ? path + ' / ' + name : name;
+    EXPANDED.add(path);
+  }
+}
+
+function updateSampleStatus(idx, human_mic, choice) {
+  const s = SAMPLES.find(x => x.idx === idx);
+  if (s) { s.labeled = !!choice; s.human_mic = human_mic; s.choice = choice; }
+}
+
+// ---------- Main ----------
+async function selectSample(idx) {
+  curIdx = idx;
+  expandTo(SAMPLES.find(x => x.idx === idx));
+  renderList();
+  const active = $(`.item[data-idx="${idx}"]`);
+  if (active) active.scrollIntoView({ block: 'nearest' });
+  const canvas = $('#canvas');
+  canvas.innerHTML = '<div id="msg">이미지 준비 중… (최초 로드는 수초 걸릴 수 있어요)</div>';
+  // 사이드바에 보이는 다음 순서를 알려 줘서, 그룹핑 순서를 바꿔도 프리페치가 맞게 돌게 한다
+  const vis = visibleIdxs();
+  const pos = vis.indexOf(idx);
+  const next = pos === -1 ? '' : vis.slice(pos + 1, pos + 9).join(',');
+  const d = await fetchJSON('/api/sample?idx=' + idx + (next ? '&next=' + next : ''));
+  if (idx !== curIdx) return; // 그 사이 다른 걸 눌렀으면 무시
+  curData = d;
+  renderTitle(d);
+  setFlags(d);
+  setBmd(d);
+  syncUrl(d);
+  if (d.error) {
+    canvas.innerHTML = `<div id="err">이미지를 불러오지 못했습니다.\n${d.error}</div>`;
+    setSaveState(d);
+    return;
+  }
+  renderGrid(d);
+  setSaveState(d);
+  warmNext(idx, d.prefetch);
+}
+
+// ---------- 다음 샘플 미리 받기 ----------
+// 서버가 /api/sample 응답에 "이미 캐시돼 있는 다음 샘플들"의 셀 URL 을 실어 준다.
+// 미리 받아 두면 클릭하는 순간 브라우저 캐시에서 바로 나온다 (샘플당 1.4~1.8MB).
+let warmTimer = null;
+let warmed = [];   // 참조를 들고 있어야 GC 가 디코드 결과를 버리지 않는다
+
+function warmNext(idx, urls) {
+  clearTimeout(warmTimer);
+  if (!urls || !urls.length) return;
+  // 지금 보고 있는 그리드가 먼저 뜨도록 미룬다. a/d 를 연타하는 동안에는
+  // 타이머가 계속 취소되므로 프리페치가 아예 시작되지 않는다.
+  warmTimer = setTimeout(() => {
+    if (idx !== curIdx) return;
+    warmed = urls.map(u => { const i = new Image(); i.src = u; return i; });
+  }, 300);
+}
+
+function setFlags(d) {
+  const amb = $('#flagAmbiguous'), te = $('#flagTE');
+  amb.checked = !!d.ambiguous; te.checked = !!d.TE;
+  amb.closest('.flag').classList.toggle('on', amb.checked);
+  te.closest('.flag').classList.toggle('on', te.checked);
+}
+
+async function submitFlags() {
+  if (curIdx === null) return;
+  const amb = $('#flagAmbiguous').checked, te = $('#flagTE').checked;
+  $('#flagAmbiguous').closest('.flag').classList.toggle('on', amb);
+  $('#flagTE').closest('.flag').classList.toggle('on', te);
+  const res = await fetchJSON('/api/flags', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idx: curIdx, ambiguous: amb, TE: te })
+  });
+  if (res.ok) {
+    if (curData) { curData.ambiguous = res.ambiguous; curData.TE = res.TE; }
+    const s = SAMPLES.find(x => x.idx === curIdx);
+    if (s) { s.ambiguous = res.ambiguous; s.TE = res.TE; }
+    renderList();
+  }
+}
+
+function renderTitle(d) {
+  $('#title').innerHTML =
+    `${d.project_id}<span class="sep">·</span>${d.sample_id}` +
+    `<span class="sep">·</span>${d.microbial_id}` +
+    `<span class="sep">·</span><span class="amr">${d.antimicrobial}</span>`;
+}
+
+function setSaveState(d) {
+  const el = $('#saveState');
+  if (d.human_mic) { el.textContent = '저장됨: ' + d.human_mic; el.classList.add('saved'); }
+  else { el.textContent = '미저장'; el.classList.remove('saved'); }
+  // 지울 라벨이 있을 때만 삭제 버튼을 켠다
+  $('#deleteBtn').disabled = !d.choice;
+}
+
+function renderGrid(d) {
+  const canvas = $('#canvas');
+  const T = d.time_len;
+  let html = '<table class="grid"><thead><tr>';
+  html += '<th></th>';                                   // conc label col
+  for (let t = 0; t < T; t++) html += `<th class="col-time">Time ${t}</th>`;
+  html += '<th class="radio-head">Image MIC</th></tr></thead><tbody>';
+
+  d.rows.forEach((row, r) => {
+    const isBmd = !row.is_control && d.bmd_choice === 'c' + row.conc_index;
+    html += `<tr${isBmd ? ' class="bmd-row"' : ''}>`;
+    html += `<td class="row-conc${row.is_control ? ' cont' : ''}">` +
+            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + `${row.label}</td>`;
+    row.cells.forEach((src, t) => {
+      html += `<td class="cell"><img loading="lazy" src="${src}" data-r="${r}" data-t="${t}"></td>`;
+    });
+    if (row.is_control) {
+      html += '<td></td>';
+    } else {
+      const val = 'c' + row.conc_index;
+      const checked = d.choice === val ? 'checked' : '';
+      html += `<td class="radio-cell${checked ? ' checked' : ''}">` +
+              `<label><input type="radio" name="mic" value="${val}" ${checked}></label></td>`;
+    }
+    html += '</tr>';
+  });
+
+  // >=32 (전 농도 성장) — 다른 농도 라디오와 동일하게 오른쪽 컬럼에 정렬
+  const agChecked = d.choice === 'all_growth';
+  const agBmd = d.bmd_choice === 'all_growth';
+  html += `<tr${agBmd ? ' class="bmd-row"' : ''}>`;
+  html += `<td class="row-conc">` + (agBmd ? '<span class="bmd-tag">BMD</span>' : '') +
+          `${d.all_growth_label}</td>`;
+  html += `<td colspan="${T}"><div class="ag-spacer"></div></td>`;
+  html += `<td class="radio-cell${agChecked ? ' checked' : ''}">` +
+          `<label><input type="radio" name="mic" value="all_growth" ${agChecked ? 'checked' : ''}></label></td>`;
+  html += '</tr>';
+  html += '</tbody></table>';
+
+  canvas.innerHTML = html;
+  applyZoom();
+
+  canvas.querySelectorAll('input[name="mic"]').forEach(inp => {
+    inp.onchange = () => submitLabel(inp.value);
+  });
+  canvas.querySelectorAll('.cell img').forEach(img => {
+    img.onclick = () => openLightbox(+img.dataset.r, +img.dataset.t);
+  });
+}
+
+// ---------- 셀 확대 보기 ----------
+let lbPos = null;   // {r, t} — 열려 있으면 좌표, 닫혀 있으면 null
+
+function openLightbox(r, t) {
+  if (!curData || !curData.rows) return;
+  const row = curData.rows[r];
+  if (!row || !row.cells[t]) return;
+  lbPos = { r, t };
+  $('#lbImg').src = row.cells[t];
+  const conc = $('#lbConc');
+  conc.textContent = row.is_control ? 'Cont' : row.label;
+  conc.classList.toggle('cont', !!row.is_control);
+  $('#lbTime').textContent = `Time ${t}`;
+  $('#lightbox').classList.add('open');
+}
+
+function closeLightbox() {
+  lbPos = null;
+  $('#lightbox').classList.remove('open');
+}
+
+/** 방향키로 이웃 셀 보기 (dr: 농도 방향, dt: 시간 방향) */
+function moveLightbox(dr, dt) {
+  if (!lbPos || !curData) return;
+  const r = Math.min(Math.max(lbPos.r + dr, 0), curData.rows.length - 1);
+  const t = Math.min(Math.max(lbPos.t + dt, 0), curData.time_len - 1);
+  openLightbox(r, t);
+}
+
+$('#lightbox').onclick = closeLightbox;
+
+async function submitLabel(choice) {
+  const el = $('#saveState');
+  el.textContent = '저장 중…'; el.classList.remove('saved');
+  const res = await fetchJSON('/api/label', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idx: curIdx, choice })
+  });
+  if (res.ok) {
+    curData.choice = choice; curData.human_mic = res.human_mic;
+    setSaveState(curData);
+    updateSampleStatus(curIdx, res.human_mic, choice);
+    renderList();
+    renderProgress(res.done, SAMPLES.length);
+    // 라디오 하이라이트 갱신
+    document.querySelectorAll('.radio-cell').forEach(td => td.classList.remove('checked'));
+    const chk = document.querySelector(`input[name="mic"][value="${choice}"]`);
+    if (chk) { const td = chk.closest('.radio-cell'); if (td) td.classList.add('checked'); }
+  } else {
+    el.textContent = '저장 실패';
+  }
+}
+
+/** 현재 샘플의 저장된 MIC 라벨을 삭제 (ambiguous/TE 플래그는 그대로 둔다). */
+async function deleteLabel() {
+  if (curIdx === null || !curData || !curData.choice) return;
+  const el = $('#saveState');
+  el.textContent = '삭제 중…'; el.classList.remove('saved');
+  const res = await fetchJSON('/api/unlabel', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idx: curIdx })
+  });
+  if (res.ok) {
+    curData.choice = ''; curData.human_mic = '';
+    setSaveState(curData);
+    updateSampleStatus(curIdx, '', '');
+    renderList();
+    renderProgress(res.done, SAMPLES.length);
+    document.querySelectorAll('input[name="mic"]').forEach(inp => { inp.checked = false; });
+    document.querySelectorAll('.radio-cell').forEach(td => td.classList.remove('checked'));
+    showToast('라벨을 삭제했습니다.');
+  } else {
+    el.textContent = '삭제 실패';
+  }
+}
+
+// ---------- 주소(딥링크) ----------
+// 주소창에 항상 현재 샘플이 반영되므로, 그 주소를 그대로 복사해 공유하면 같은 화면이 열린다.
+function syncUrl(d) {
+  if (!d || !d.sample_id) return;
+  const q = new URLSearchParams({
+    project_id: d.project_id, sample_id: d.sample_id, antimicrobial: d.antimicrobial
+  });
+  history.replaceState(null, '', location.pathname + '?' + q.toString());
+}
+
+/** 주소의 project_id/sample_id/antimicrobial 로 샘플 idx를 찾는다. 없으면 null. */
+async function idxFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const sid = p.get('sample_id'), amr = p.get('antimicrobial');
+  if (!sid || !amr) return null;
+  const q = new URLSearchParams({ sample_id: sid, antimicrobial: amr });
+  if (p.get('project_id')) q.set('project_id', p.get('project_id'));
+  const r = await fetchJSON('/api/resolve?' + q.toString());
+  if (r.ok) return r.idx;
+  showToast(`${sid} · ${amr} — ${r.error}`);
+  return null;
+}
+
+// ---------- BMD MIC 토글 ----------
+// 기본은 감춤. 라벨링 중 BMD 값에 끌려가지 않도록 직접 켤 때만 보인다.
+function applyBmdToggle() {
+  const on = localStorage.getItem('showBmd') === '1';
+  document.body.classList.toggle('show-bmd', on);
+  $('#bmdToggle').classList.toggle('on', on);
+}
+function toggleBmd() {
+  localStorage.setItem('showBmd', localStorage.getItem('showBmd') === '1' ? '0' : '1');
+  applyBmdToggle();
+}
+function setBmd(d) {
+  $('#bmdVal').textContent = (d && d.bmd_mic) ? d.bmd_mic : '—';
+}
+$('#bmdToggle').onclick = toggleBmd;
+
+// ---------- Zoom ----------
+function applyZoom() {
+  document.documentElement.style.setProperty('--cell', $('#zoom').value + 'px');
+}
+$('#zoom').oninput = applyZoom;
+
+// ---------- Toast ----------
+let toastTimer = null;
+function showToast(msg) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1900);
+}
+
+// ---------- Nav ----------
+/** 지금 사이드바에 펼쳐져 보이는 샘플 idx (표시 순서 그대로). */
+function visibleIdxs() {
+  return [...document.querySelectorAll('.item')].map(e => +e.dataset.idx);
+}
+
+function move(delta) {
+  const visible = visibleIdxs();
+  if (!visible.length) return;
+  let pos = visible.indexOf(curIdx);
+  if (pos === -1) pos = 0;
+  const next = pos + delta;
+  if (next >= visible.length) { showToast('마지막 샘플입니다.'); return; }
+  if (next < 0) { showToast('첫 번째 샘플입니다.'); return; }
+  selectSample(visible[next]);
+}
+document.querySelectorAll('#grouping .seg').forEach(b => {
+  b.onclick = () => setGroupOrder(b.dataset.order);
+});
+$('#sidebarToggle').onclick = () => document.body.classList.toggle('sidebar-collapsed');
+
+// ---------- 사이드바 폭 조절 ----------
+const SIDEBAR_MIN = 180, SIDEBAR_MAX_RATIO = 0.6, SIDEBAR_DEFAULT = 300;
+function setSidebarWidth(px) {
+  const max = Math.max(SIDEBAR_MIN, window.innerWidth * SIDEBAR_MAX_RATIO);
+  const w = Math.round(Math.min(max, Math.max(SIDEBAR_MIN, px)));
+  document.documentElement.style.setProperty('--sidebar-w', w + 'px');
+  localStorage.setItem('sidebarW', w);
+}
+setSidebarWidth(+localStorage.getItem('sidebarW') || SIDEBAR_DEFAULT);
+$('#resizer').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  document.body.classList.add('resizing');
+  $('#resizer').setPointerCapture(e.pointerId);
+  const onMove = (ev) => setSidebarWidth(ev.clientX);
+  const onUp = (ev) => {
+    document.body.classList.remove('resizing');
+    $('#resizer').releasePointerCapture(ev.pointerId);
+    $('#resizer').removeEventListener('pointermove', onMove);
+    $('#resizer').removeEventListener('pointerup', onUp);
+  };
+  $('#resizer').addEventListener('pointermove', onMove);
+  $('#resizer').addEventListener('pointerup', onUp);
+});
+$('#resizer').addEventListener('dblclick', () => setSidebarWidth(SIDEBAR_DEFAULT));
+$('#prevBtn').onclick = () => move(-1);
+$('#nextBtn').onclick = () => move(1);
+$('#deleteBtn').onclick = deleteLabel;
+$('#search').oninput = renderList;
+$('#flagAmbiguous').onchange = submitFlags;
+$('#flagTE').onchange = submitFlags;
+
+// 한/영 입력 상태와 무관하게 단축키가 동작하도록 물리 키 위치(e.code)를 우선 사용한다.
+// 한글 입력 상태에서는 e.key 가 'd' 대신 'ㅇ' 처럼 자모로 들어오기 때문.
+function hotkeyOf(e) {
+  const code = e.code || '';
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();   // KeyD  -> 'd'
+  const digit = /^(?:Digit|Numpad)([0-9])$/.exec(code);
+  if (digit) return digit[1];                                        // Digit1 -> '1'
+  if (code) return code;                                             // Escape, ArrowLeft, ...
+  // e.code 를 지원하지 않는 환경 대비 (영문 입력 상태에서만 동작)
+  return e.key && e.key.length === 1 ? e.key.toLowerCase() : e.key;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+  // IME 조합 중인 키 입력은 무시 (조합 확정 시 중복 실행 방지)
+  if (e.isComposing) return;
+  // 브라우저 단축키(Ctrl+A 등)와 겹치지 않도록
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  const k = hotkeyOf(e);
+
+  // 확대 보기가 열려 있으면 방향키/Esc만 받는다 (실수로 라벨이 저장되지 않도록)
+  if (lbPos) {
+    if (k === 'Escape') closeLightbox();
+    else if (k === 'ArrowLeft') moveLightbox(0, -1);
+    else if (k === 'ArrowRight') moveLightbox(0, 1);
+    else if (k === 'ArrowUp') moveLightbox(-1, 0);
+    else if (k === 'ArrowDown') moveLightbox(1, 0);
+    else return;
+    e.preventDefault();
+    return;
+  }
+
+  if (k === 'd') move(1);
+  else if (k === 'a') move(-1);
+  else if (k === 'b') toggleBmd();
+  else if (k === 'g') setGroupOrder(groupOrder === 'amr' ? 'org' : 'amr');
+  else if (k >= '1' && k <= '9') {
+    const rows = curData && curData.rows ? curData.rows.filter(r => !r.is_control) : [];
+    const j = +k - 1;
+    if (j < rows.length) {
+      const r = document.querySelector(`input[name="mic"][value="c${rows[j].conc_index}"]`);
+      if (r) { r.checked = true; r.onchange(); }
+    }
+  } else if (k === '0') {
+    const r = document.querySelector('input[name="mic"][value="all_growth"]');
+    if (r) { r.checked = true; r.onchange(); }
+  }
+});
+
+// ---------- init ----------
+(async () => {
+  applyBmdToggle();
+  applyGroupOrder();
+  await loadList();
+  const fromUrl = await idxFromUrl();
+  if (fromUrl !== null) { selectSample(fromUrl); return; }
+  const firstUnlabeled = SAMPLES.find(s => !s.labeled) || SAMPLES[0];
+  if (firstUnlabeled) selectSample(firstUnlabeled.idx);
+})();
+</script>
+</body>
+</html>

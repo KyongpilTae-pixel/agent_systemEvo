@@ -1,0 +1,841 @@
+#!/usr/bin/env python3
+"""Human MIC labeling server.
+
+safetensors 이미지(농도 x Time 그리드)를 브라우저로 보여주고,
+sample_id / antimicrobial 별 휴먼 MIC를 라디오로 입력받아 CSV로 저장한다.
+
+의존성: 표준 라이브러리 + pandas + numpy + PIL + safetensors (Flask 불필요)
+실행:  python3 app.py  ->  http://localhost:5057
+"""
+
+import csv
+import gzip
+import json
+import os
+import queue
+import re
+import shutil
+import sys
+import threading
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import pandas as pd
+from PIL import Image
+from safetensors import safe_open
+
+# ----------------------------------------------------------------------------
+# 설정
+# ----------------------------------------------------------------------------
+HERE = os.path.dirname(os.path.abspath(__file__))
+# 캐시(약 64GB)는 /208_data 가 아니라 홈 볼륨에 둔다. 환경변수 CACHE_ROOT 로 변경 가능.
+#
+# /208_data(sdb) 는 여러 사람이 함께 쓰는 회전식 어레이라 남의 작업이 몰리면 %util 이 99% 까지
+# 올라간다. 샘플 하나가 셀 PNG 49~70개, 즉 랜덤 읽기 49~70회라 이때 직격탄을 맞는다.
+# 실측(무작위 12샘플 콜드 읽기):
+#     /208_data (sdb) : 중앙값 132ms, 최악 1252ms
+#     홈 볼륨  (sda) : 중앙값  12ms, 최악   15ms
+# 평균보다 꼬리가 중요하다 — "가끔 답답한" 증상의 정체가 저 1252ms 였다.
+CACHE_ROOT = os.environ.get("CACHE_ROOT", "/home/kptae/human_labeling_cache")
+CELLS_DIR = os.path.join(CACHE_ROOT, "cells")
+CACHE_DIR = os.path.join(CACHE_ROOT, "bugmap")
+INDEX_HTML = os.path.join(HERE, "index.html")
+PORT = int(os.environ.get("PORT", "5058"))
+
+# 셀 이미지 URL 에는 ?v=<.done mtime> 캐시버스터가 붙으므로(ensure_cells 참고) 오래 캐시해도
+# 안전하다. 매일 쓰는 도구라 하루(86400)마다 전부 다시 받는 건 낭비다.
+IMG_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+# 라벨 대상 데이터. label 이 사이드바 최상위 폴더 이름이 된다.
+# organism_group / microbial_id 는 allinfo 에서 merge 해 온다 (parquet 에 있어도 allinfo 를 따른다).
+SOURCES = [
+    {
+        "id": "fda_clinical",
+        "label": "FDA_Clinical",
+        "parquet": "/home/kptae/data/allinfo/new_fda2023/"
+        "fda_clinical_MEV_truncation_20260522_exceptGF,JinhaTE_df.parquet",
+        "allinfo": "/home/kptae/data/allinfo/new_fda2023/"
+        "202510_FDA_Clinical_USA_allInfo_MEV_truncation_260401.csv",
+    },
+    {
+        "id": "reproducibility",
+        "label": "Reproducibility",
+        "parquet": "/home/kptae/data/allinfo/analytical/"
+        "FDA_Analytical_reproducibility_exceptGN26_df_260624.parquet",
+        "allinfo": "/home/kptae/data/allinfo/analytical/"
+        "FDA_Analytical_reproducibility_MEVtruncation_allInfo_260416.csv",
+    },
+    {
+        "id": "sample_stability",
+        "label": "Sample_Stability",
+        "parquet": "/home/kptae/data/allinfo/analytical/"
+        "FDA_Analytical_sample_stability_df_260723_DelOutlier_with_BMD.parquet",
+        "allinfo": "/home/kptae/data/allinfo/analytical/"
+        "FDA_Analytical_sample_stability_allInfo_new_260723.csv",
+    },
+]
+
+# BMD를 화면에 표시하지 않을 약제.
+# bmd_mic_order가 임의값(0/14)으로만 채워져 있고 bmd_mic도 POS/NEG/ND 같은
+# 스크리닝 판정이라 라디오 눈금과 대응되지 않는다. 참고할 수 없는 값이므로
+# 아예 내보내지 않는다.
+BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
+
+# 라벨 결과는 균종·약제 구분 없이 이 파일 하나로 관리한다.
+CSV_PATH = os.path.join(HERE, "image_mic_labels.csv")
+CSV_FIELDS = [
+    "project_id",
+    "sample_id",
+    "organism_group",
+    "microbial_id",
+    "antimicrobial",
+    "image_mic",
+    "image_mic_order",
+    "ambiguous",
+    "TE",
+]
+
+
+def _truthy(v) -> bool:
+    return str(v).strip().lower() in ("1", "true", "yes", "y")
+
+
+def choice_to_order(choice: str) -> str:
+    """내부 choice -> CSV image_mic_order. 'c3'->'3', 'all_growth'->'14'."""
+    if choice == "all_growth":
+        return "14"
+    m = re.match(r"^c(\d+)$", choice)
+    return m.group(1) if m else ""
+
+
+def order_to_choice(order) -> str:
+    """CSV image_mic_order(및 구버전 choice) -> 내부 choice."""
+    v = str(order).strip()
+    if v == "":
+        return ""
+    if v in ("all_growth", "14"):
+        return "all_growth"
+    if v.startswith("c"):
+        return v
+    if v.isdigit():
+        return f"c{v}"
+    return ""
+
+
+os.makedirs(CELLS_DIR, exist_ok=True)
+_lock = threading.Lock()
+
+
+# ----------------------------------------------------------------------------
+# 데이터 로드
+# ----------------------------------------------------------------------------
+def _fmt_num(v: float) -> str:
+    """32.0 -> '32', 0.5 -> '0.5' 형태로 포맷."""
+    return f"{v:g}"
+
+
+def _safe_key(sample_id: str, antimicrobial: str) -> str:
+    raw = f"{sample_id}__{antimicrobial}"
+    return re.sub(r"[^A-Za-z0-9._-]", "_", raw)
+
+
+BUGMAP_COLS = ["project_id", "sample_id", "organism_group", "microbial_id"]
+BMD_COLS = ["project_id", "sample_id", "antimicrobial", "bmd_mic"]
+
+
+def load_allinfo_maps(src: dict) -> tuple:
+    """allinfo에서 (균종 매핑, BMD MIC 매핑)을 뽑는다.
+
+    allinfo CSV가 수백 MB라 필요한 컬럼만 한 번 읽어 캐시 폴더에 parquet 두 개로 저장한다
+    (allinfo가 더 새로우면 자동 재생성).
+    - 균종 매핑: sample 단위. 한 sample에 값이 여러 개면 임의로 고르지 않고
+      ' / '로 이어붙여 모호함을 드러낸다.
+    - BMD 매핑: sample x 약제 단위. allinfo가 적어 준 원본 표기를 그대로 쓴다
+      (`POS`/`NEG`, `4/2` 같은 조합약제 표기, `>8` 등 라디오 눈금과 다른 값이 섞여 있다).
+    """
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    bug_path = os.path.join(CACHE_DIR, f"{src['id']}_bugmap.parquet")
+    bmd_path = os.path.join(CACHE_DIR, f"{src['id']}_bmdmic.parquet")
+    stale = any(
+        not os.path.exists(p) or os.path.getmtime(p) < os.path.getmtime(src["allinfo"])
+        for p in (bug_path, bmd_path)
+    )
+    if stale:
+        raw = pd.read_csv(src["allinfo"], usecols=BUGMAP_COLS + ["antimicrobial", "bmd_mic"])
+
+        bug = raw[BUGMAP_COLS].drop_duplicates().sort_values(BUGMAP_COLS).astype(str)
+        bug = bug.groupby(["project_id", "sample_id"], as_index=False).agg(
+            {
+                "organism_group": lambda s: " / ".join(dict.fromkeys(s)),
+                "microbial_id": lambda s: " / ".join(dict.fromkeys(s)),
+            }
+        )
+        bug.to_parquet(bug_path, index=False)
+
+        bmd = raw[BMD_COLS].dropna(subset=["bmd_mic"]).astype(str)
+        bmd = bmd.drop_duplicates(subset=["project_id", "sample_id", "antimicrobial"])
+        bmd.to_parquet(bmd_path, index=False)
+
+    return pd.read_parquet(bug_path), pd.read_parquet(bmd_path)
+
+
+def resolve_path(src: dict, path: str) -> str:
+    """parquet에 적힌 safetensors 경로를 이 머신의 실제 경로로 바꾼다."""
+    for prefix, replacement in src.get("path_remap", ()):
+        if path.startswith(prefix):
+            return replacement + path[len(prefix) :]
+    return path
+
+
+def load_samples() -> list[dict]:
+    """모든 소스의 샘플을 하나의 리스트로 로드 (idx는 전역 고유)."""
+    samples = []
+    used_keys = set()
+    for src in SOURCES:
+        bugmap, bmdmap = load_allinfo_maps(src)
+        df = pd.read_parquet(src["parquet"])
+        # 균종 컬럼이 parquet 에도 있으면 merge 가 _x/_y 로 쪼개지므로, allinfo 쪽을 쓰도록 미리 버린다
+        df = df.drop(columns=[c for c in ("organism_group", "microbial_id") if c in df.columns])
+        df = df.merge(bugmap, on=["project_id", "sample_id"], how="left")
+        df = df.merge(bmdmap, on=["project_id", "sample_id", "antimicrobial"], how="left")
+        df[["organism_group", "microbial_id"]] = df[["organism_group", "microbial_id"]].fillna(
+            "Unknown"
+        )
+        df["bmd_mic"] = df["bmd_mic"].fillna("")
+        # 트리 순서대로 정렬해 두면 사이드바와 CSV 출력이 모두 보기 좋다
+        df = df.sort_values(
+            ["antimicrobial", "organism_group", "microbial_id", "sample_id"], kind="stable"
+        )
+        for row in df.to_dict("records"):
+            conc_raw = str(row["concentration_list"])
+            concentrations = [c.strip() for c in conc_raw.split(",") if c.strip() != ""]
+            path = str(row["image_safetensors_path"])
+            m = re.search(r"_(\d+)control", os.path.basename(path))
+            control_len = int(m.group(1)) if m else 1
+            sample_id = str(row["sample_id"])
+            antimicrobial = str(row["antimicrobial"])
+            hide_bmd = antimicrobial in BMD_HIDDEN_DRUGS
+            # 이미지 캐시 키: 기존 캐시를 그대로 재사용하되, 소스 간 충돌 시에만 접두사 추가
+            key = _safe_key(sample_id, antimicrobial)
+            if key in used_keys:
+                key = _safe_key(f"{src['id']}__{sample_id}", antimicrobial)
+            used_keys.add(key)
+            samples.append(
+                {
+                    "idx": len(samples),
+                    "src_id": src["id"],
+                    "src_label": src["label"],
+                    "project_id": str(row["project_id"]),
+                    "sample_id": sample_id,
+                    "organism_group": str(row["organism_group"]),
+                    "microbial_id": str(row["microbial_id"]),
+                    "antimicrobial": antimicrobial,
+                    "group": [
+                        src["label"],
+                        antimicrobial,
+                        str(row["organism_group"]),
+                        str(row["microbial_id"]),
+                    ],
+                    "concentrations": concentrations,
+                    "bmd_mic": "" if hide_bmd else str(row["bmd_mic"]),
+                    # df의 bmd_mic_order는 image_mic_order와 같은 눈금(0=최저농도, 14=전 농도 성장)
+                    "bmd_choice": "" if hide_bmd else order_to_choice(row["bmd_mic_order"]),
+                    "path": path,
+                    "control_len": control_len,
+                    "key": key,
+                }
+            )
+    return samples
+
+
+SAMPLES = load_samples()
+SAMPLES_BY_IDX = {s["idx"]: s for s in SAMPLES}
+
+# (sample_id, antimicrobial) -> 샘플들. 주소로 바로 여는 /api/resolve 용 (대소문자 무시).
+SAMPLES_BY_NAME: dict = {}
+for _s in SAMPLES:
+    SAMPLES_BY_NAME.setdefault(
+        (_s["sample_id"].lower(), _s["antimicrobial"].lower()), []
+    ).append(_s)
+
+
+def resolve_sample(sample_id: str, antimicrobial: str, project_id: str = "") -> dict:
+    """sample_id / antimicrobial (+ 선택적 project_id)로 샘플을 찾는다.
+
+    project_id를 생략해도 후보가 하나뿐이면 그대로 연다.
+    """
+    hits = SAMPLES_BY_NAME.get((sample_id.strip().lower(), antimicrobial.strip().lower()), [])
+    pid = project_id.strip().lower()
+    if pid:
+        hits = [s for s in hits if s["project_id"].lower() == pid]
+    if len(hits) == 1:
+        return {"ok": True, "idx": hits[0]["idx"]}
+    if not hits:
+        return {"ok": False, "error": "해당 샘플을 찾지 못했습니다."}
+    return {
+        "ok": False,
+        "error": "project_id가 필요합니다 (후보 여러 개).",
+        "candidates": [
+            {"project_id": s["project_id"], "idx": s["idx"], "group": s["group"]} for s in hits
+        ],
+    }
+
+
+# ----------------------------------------------------------------------------
+# 라벨(CSV) 저장소
+# ----------------------------------------------------------------------------
+def label_key(sample: dict) -> tuple:
+    return (sample["project_id"], sample["sample_id"], sample["antimicrobial"])
+
+
+def load_labels() -> dict:
+    """단일 CSV에서 라벨을 읽는다."""
+    labels = {}
+    if os.path.exists(CSV_PATH):
+        with open(CSV_PATH, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                key = (r.get("project_id", ""), r.get("sample_id", ""), r.get("antimicrobial", ""))
+                labels[key] = {
+                    "human_mic": r.get("image_mic", r.get("human_mic", "")),
+                    "choice": order_to_choice(r.get("image_mic_order", r.get("choice", ""))),
+                    "ambiguous": _truthy(r.get("ambiguous", "")),
+                    "TE": _truthy(r.get("TE", "")),
+                }
+    return labels
+
+
+LABELS = load_labels()
+
+
+def save_labels():
+    """전체 라벨을 단일 CSV로 원자적 저장 (샘플 정렬 순서 유지)."""
+    tmp = CSV_PATH + ".tmp"
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        w.writeheader()
+        for s in SAMPLES:
+            key = label_key(s)
+            if key in LABELS:
+                lab = LABELS[key]
+                w.writerow(
+                    {
+                        "project_id": s["project_id"],
+                        "sample_id": s["sample_id"],
+                        "organism_group": s["organism_group"],
+                        "microbial_id": s["microbial_id"],
+                        "antimicrobial": s["antimicrobial"],
+                        "image_mic": lab["human_mic"],
+                        "image_mic_order": choice_to_order(lab["choice"]),
+                        "ambiguous": "1" if lab.get("ambiguous") else "0",
+                        "TE": "1" if lab.get("TE") else "0",
+                    }
+                )
+    os.replace(tmp, CSV_PATH)
+
+
+def get_entry(sample: dict) -> dict:
+    """샘플의 라벨 항목을 반환 (없으면 기본값으로 새로 생성)."""
+    key = label_key(sample)
+    if key not in LABELS:
+        LABELS[key] = {"human_mic": "", "choice": "", "ambiguous": False, "TE": False}
+    return LABELS[key]
+
+
+def count_done() -> int:
+    """MIC(choice)가 지정된 샘플 수. 플래그만 있는 항목은 미완료로 간주."""
+    done = 0
+    for s in SAMPLES:
+        lab = LABELS.get(label_key(s))
+        if lab and lab.get("choice"):
+            done += 1
+    return done
+
+
+# ----------------------------------------------------------------------------
+# 셀 이미지 추출 (lazy, 캐시)
+# ----------------------------------------------------------------------------
+_cell_locks: dict = {}
+_cell_locks_guard = threading.Lock()
+
+
+def _cell_lock(key: str) -> threading.Lock:
+    """샘플별 추출 락. 프리페치와 사용자 요청이 같은 샘플을 중복 추출하지 않도록."""
+    with _cell_locks_guard:
+        return _cell_locks.setdefault(key, threading.Lock())
+
+
+def _cache_stale(sample: dict, done_flag: str) -> bool:
+    """safetensors 가 캐시보다 새로우면(데이터 갱신) 캐시를 버린다."""
+    try:
+        return os.path.getmtime(done_flag) < os.path.getmtime(sample["path"])
+    except OSError:
+        # 원본이 없으면 이미 뽑아 둔 캐시라도 그대로 쓴다
+        return False
+
+
+def is_cached(sample: dict) -> bool:
+    done_flag = os.path.join(CELLS_DIR, sample["key"], ".done")
+    return os.path.exists(done_flag) and not _cache_stale(sample, done_flag)
+
+
+def ensure_cells(sample: dict) -> dict:
+    """safetensors -> 셀 PNG. (row, col) 그리드 레이아웃 반환."""
+    n_conc = len(sample["concentrations"])
+    control_len = sample["control_len"]
+    n_rows = n_conc + control_len
+
+    out_dir = os.path.join(CELLS_DIR, sample["key"])
+    done_flag = os.path.join(out_dir, ".done")
+
+    with _cell_lock(sample["key"]):
+        _extract_cells(sample, out_dir, done_flag, n_rows)
+
+    with open(done_flag) as f:
+        meta = json.load(f)
+    time_len = meta["time_len"]
+    # 캐시 버스터: 재추출하면 .done 의 mtime 이 바뀌므로 URL 도 같이 바뀐다.
+    # (URL 이 고정이면 브라우저가 max-age 동안 예전 PNG 를 계속 쓴다)
+    ver = int(os.path.getmtime(done_flag))
+
+    rows = []
+    for row in range(n_rows):
+        is_control = row < control_len
+        conc_index = None if is_control else row - control_len
+        label = "Cont" if is_control else sample["concentrations"][conc_index]
+        cells = [
+            f"/static/cells/{sample['key']}/r{row}_t{col}.png?v={ver}" for col in range(time_len)
+        ]
+        rows.append(
+            {"label": label, "is_control": is_control, "conc_index": conc_index, "cells": cells}
+        )
+
+    return {"time_len": time_len, "rows": rows}
+
+
+def cached_cell_urls(sample: dict) -> list:
+    """이미 캐시된 샘플의 셀 URL 목록. **추출은 하지 않는다.**
+
+    브라우저가 다음 샘플을 미리 받아 두게 하려고 /api/sample 응답에 실어 보낸다.
+    아직 캐시가 없으면 빈 리스트를 준다 — 프리페치가 수백 ms 짜리 추출을 기다리며
+    브라우저 연결 슬롯을 잡고 있으면 정작 지금 보는 화면이 느려진다.
+    """
+    done_flag = os.path.join(CELLS_DIR, sample["key"], ".done")
+    try:
+        ver = int(os.path.getmtime(done_flag))
+        with open(done_flag) as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if _cache_stale(sample, done_flag):
+        return []
+    return [
+        f"/static/cells/{sample['key']}/r{row}_t{col}.png?v={ver}"
+        for row in range(meta["n_rows"])
+        for col in range(meta["time_len"])
+    ]
+
+
+def _extract_cells(sample: dict, out_dir: str, done_flag: str, n_rows: int):
+    if os.path.exists(done_flag) and _cache_stale(sample, done_flag):
+        # 그리드 크기가 바뀌었을 수 있으니 이전 PNG 를 지우고 통째로 다시 뽑는다
+        for f in os.listdir(out_dir):
+            os.remove(os.path.join(out_dir, f))
+    if not os.path.exists(done_flag):
+        if not os.path.exists(sample["path"]):
+            raise FileNotFoundError(f"safetensors 없음: {sample['path']}")
+        os.makedirs(out_dir, exist_ok=True)
+        with safe_open(sample["path"], "numpy") as f:
+            arr = f.get_tensor("image")  # (N, 1, H, W) uint8
+        total = arr.shape[0]
+        time_len = total // n_rows
+        for idx in range(total):
+            row = idx // time_len
+            col = idx % time_len
+            cell = arr[idx, 0]
+            Image.fromarray(cell, "L").save(os.path.join(out_dir, f"r{row}_t{col}.png"))
+        # .done 은 마지막에 써서, 중간에 죽으면 다음 실행이 다시 추출하도록 한다
+        with open(done_flag, "w") as f:
+            f.write(json.dumps({"time_len": time_len, "n_rows": n_rows}))
+
+
+# ----------------------------------------------------------------------------
+# 프리페치 — 다음에 볼 샘플을 미리 추출해 둔다
+# ----------------------------------------------------------------------------
+PREFETCH_AHEAD = int(os.environ.get("PREFETCH_AHEAD", "8"))
+PREFETCH_WORKERS = int(os.environ.get("PREFETCH_WORKERS", "2"))
+# 브라우저에게 "미리 받아 두라"고 URL 을 넘겨 줄 샘플 수. 서버측 추출 선행(PREFETCH_AHEAD)
+# 과 달리 실제 네트워크 전송이 일어나므로 훨씬 작게 잡는다 (샘플당 1.4~1.8MB).
+PREFETCH_WARM = int(os.environ.get("PREFETCH_WARM", "2"))
+
+_prefetch_q: "queue.Queue[int]" = queue.Queue()
+_prefetch_queued: set = set()
+_prefetch_guard = threading.Lock()
+
+
+def _prefetch_worker():
+    while True:
+        idx = _prefetch_q.get()
+        try:
+            s = SAMPLES_BY_IDX.get(idx)
+            if s and not is_cached(s):
+                ensure_cells(s)
+        except Exception:  # noqa: BLE001 — 프리페치 실패는 조용히 무시 (열 때 다시 시도)
+            pass
+        finally:
+            with _prefetch_guard:
+                _prefetch_queued.discard(idx)
+            _prefetch_q.task_done()
+
+
+def prefetch_idxs(idxs, ahead: int = PREFETCH_AHEAD):
+    """주어진 idx들을 앞에서부터 최대 ahead 개까지 큐에 넣는다."""
+    for j in list(idxs)[:ahead]:
+        s = SAMPLES_BY_IDX.get(j)
+        if not s or is_cached(s):
+            continue
+        with _prefetch_guard:
+            if j in _prefetch_queued:
+                continue
+            _prefetch_queued.add(j)
+        _prefetch_q.put(j)
+
+
+def schedule_prefetch(idx: int, ahead: int = PREFETCH_AHEAD):
+    """idx 다음 샘플들을 큐에 넣는다 (서버 기본 정렬 순서).
+
+    사이드바 그룹핑 순서를 바꾸면 '다음 샘플'이 idx+1이 아니게 되므로,
+    브라우저가 실제 다음 순서를 보내 주면 그쪽(prefetch_idxs)을 우선한다.
+    """
+    prefetch_idxs(range(idx + 1, min(idx + 1 + ahead, len(SAMPLES))), ahead)
+
+
+def start_prefetch_workers():
+    for _ in range(PREFETCH_WORKERS):
+        threading.Thread(target=_prefetch_worker, daemon=True).start()
+
+
+def choice_to_mic(sample: dict, choice: str) -> str:
+    """라디오 choice -> 휴먼 MIC 문자열.
+
+    'c{j}'      : j번째 농도 (j==0 이면 '<=최저농도')
+    'all_growth': 최고농도까지 성장 -> '>=(최고농도*2)'
+    """
+    concentrations = sample["concentrations"]
+    if choice == "all_growth":
+        hi = 2.0 * float(concentrations[-1])
+        return f">={_fmt_num(hi)}"
+    m = re.match(r"^c(\d+)$", choice)
+    if not m:
+        raise ValueError(f"잘못된 choice: {choice}")
+    j = int(m.group(1))
+    if j < 0 or j >= len(concentrations):
+        raise ValueError(f"농도 인덱스 범위 초과: {j}")
+    if j == 0:
+        return f"<={concentrations[0]}"
+    return concentrations[j]
+
+
+# ----------------------------------------------------------------------------
+# HTTP 핸들러
+# ----------------------------------------------------------------------------
+class Handler(BaseHTTPRequestHandler):
+    # 기본값은 HTTP/1.0 이라 keep-alive 가 꺼진다. 샘플 하나가 셀 이미지 49~70장이므로
+    # 그만큼 TCP 연결을 새로 맺고 끊게 된다. (_json/_bytes 모두 Content-Length 를
+    # 정확히 보내고 있으므로 1.1 로 올려도 안전하다.)
+    protocol_version = "HTTP/1.1"
+    # keep-alive 를 켜면 유휴 연결이 readline() 에서 스레드를 무한정 붙잡는다.
+    # 브라우저 하나가 6연결을 쓰므로 타임아웃이 없으면 스레드가 쌓이기만 한다.
+    timeout = 10
+
+    def log_message(self, *args):
+        pass  # 조용히
+
+    # ---- 응답 헬퍼 ----
+    def _json(self, obj, status=200):
+        body = json.dumps(obj).encode("utf-8")
+        # /api/samples 는 38,000건이 넘어 12MB 가 나온다. gzip 이면 40배 줄어든다.
+        # 작은 응답(라벨 저장 등)은 압축이 오히려 손해라 임계값을 둔다.
+        encoding = None
+        if len(body) > 1024 and "gzip" in self.headers.get("Accept-Encoding", ""):
+            body = gzip.compress(body, 6)
+            encoding = "gzip"
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _bytes(self, body, content_type, status=200, cache=False):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        if cache:
+            # URL 에 ?v=<mtime> 이 붙어 있으므로 오래 캐시해도 안전하다
+            self.send_header("Cache-Control", IMG_CACHE_CONTROL)
+        else:
+            # index.html / JSON 은 절대 캐시하지 않는다 (예전 화면·데이터 방지)
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _sample_status(self, s):
+        lab = LABELS.get(label_key(s))
+        return {
+            "idx": s["idx"],
+            # group 은 서버 기본 순서. 사이드바는 아래 필드로 순서를 바꿔 가며 직접 조립한다.
+            "group": s["group"],
+            "src_label": s["src_label"],
+            "sample_id": s["sample_id"],
+            "organism_group": s["organism_group"],
+            "microbial_id": s["microbial_id"],
+            "antimicrobial": s["antimicrobial"],
+            "labeled": bool(lab and lab.get("choice")),
+            "human_mic": lab["human_mic"] if lab else "",
+            "choice": lab["choice"] if lab else "",
+            "ambiguous": bool(lab and lab.get("ambiguous")),
+            "TE": bool(lab and lab.get("TE")),
+        }
+
+    # ---- GET ----
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/" or path == "/index.html":
+            with open(INDEX_HTML, "rb") as f:
+                self._bytes(f.read(), "text/html; charset=utf-8")
+            return
+
+        if path == "/api/samples":
+            total = len(SAMPLES)
+            done = count_done()
+            self._json(
+                {
+                    "total": total,
+                    "done": done,
+                    "samples": [self._sample_status(s) for s in SAMPLES],
+                }
+            )
+            return
+
+        if path == "/api/resolve":
+            self._json(
+                resolve_sample(
+                    qs.get("sample_id", [""])[0],
+                    qs.get("antimicrobial", [""])[0],
+                    qs.get("project_id", [""])[0],
+                )
+            )
+            return
+
+        if path == "/api/sample":
+            try:
+                idx = int(qs.get("idx", ["-1"])[0])
+                s = SAMPLES_BY_IDX[idx]
+            except (ValueError, KeyError):
+                self._json({"error": "invalid idx"}, 400)
+                return
+            lab = LABELS.get(label_key(s))
+            # 다음 샘플들을 백그라운드에서 미리 추출.
+            # next=1,2,3 이 오면 사이드바에 실제로 보이는 다음 순서를 쓴다.
+            nxt = [int(t) for t in qs.get("next", [""])[0].split(",") if t.strip().isdigit()]
+            if nxt:
+                prefetch_idxs(nxt)
+            else:
+                schedule_prefetch(idx)
+                nxt = list(range(idx + 1, min(idx + 1 + PREFETCH_AHEAD, len(SAMPLES))))
+            # 브라우저가 다음 샘플 이미지를 미리 받아 둘 수 있게 URL 을 실어 보낸다.
+            # 이미 캐시된 것만 넣으므로 추가 왕복도, 추출 대기도 없다.
+            warm = []
+            for j in nxt[:PREFETCH_WARM]:
+                s_next = SAMPLES_BY_IDX.get(j)
+                if s_next:
+                    warm.extend(cached_cell_urls(s_next))
+            try:
+                layout = ensure_cells(s)
+            except Exception as e:  # noqa: BLE001
+                self._json(
+                    {
+                        "idx": idx,
+                        "project_id": s["project_id"],
+                        "sample_id": s["sample_id"],
+                        "microbial_id": s["microbial_id"],
+                        "antimicrobial": s["antimicrobial"],
+                        "bmd_mic": s["bmd_mic"],
+                        "bmd_choice": s["bmd_choice"],
+                        "ambiguous": bool(lab and lab.get("ambiguous")),
+                        "TE": bool(lab and lab.get("TE")),
+                        "error": str(e),
+                    },
+                    200,
+                )
+                return
+            hi = _fmt_num(2.0 * float(s["concentrations"][-1]))
+            self._json(
+                {
+                    "idx": idx,
+                    "project_id": s["project_id"],
+                    "sample_id": s["sample_id"],
+                    "microbial_id": s["microbial_id"],
+                    "antimicrobial": s["antimicrobial"],
+                    "concentrations": s["concentrations"],
+                    "time_len": layout["time_len"],
+                    "rows": layout["rows"],
+                    "all_growth_label": f">={hi}",
+                    "bmd_mic": s["bmd_mic"],
+                    "bmd_choice": s["bmd_choice"],
+                    "human_mic": lab["human_mic"] if lab else "",
+                    "choice": lab["choice"] if lab else "",
+                    "ambiguous": bool(lab and lab.get("ambiguous")),
+                    "TE": bool(lab and lab.get("TE")),
+                    "prefetch": warm,
+                }
+            )
+            return
+
+        if path.startswith("/static/cells/"):
+            rel = path[len("/static/cells/") :]
+            rel = urllib.parse.unquote(rel)
+            fp = os.path.normpath(os.path.join(CELLS_DIR, rel))
+            if not fp.startswith(CELLS_DIR + os.sep) or not os.path.isfile(fp):
+                self._bytes(b"", "image/png", 404)
+                return
+            st = os.stat(fp)
+            etag = f'"{int(st.st_mtime)}-{st.st_size}"'
+            # 브라우저가 재검증할 때(Ctrl+R 등) 본문 전송을 통째로 없앤다.
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                self.send_header("ETag", etag)
+                self.send_header("Cache-Control", IMG_CACHE_CONTROL)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(st.st_size))
+            self.send_header("Cache-Control", IMG_CACHE_CONTROL)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            # 통째로 read() 하지 않고 흘려보낸다 (GIL 점유·메모리 할당 감소)
+            with open(fp, "rb") as f:
+                shutil.copyfileobj(f, self.wfile)
+            return
+
+        self._bytes(b"Not Found", "text/plain", 404)
+
+    # ---- POST ----
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        # keep-alive 에서는 본문을 끝까지 읽지 않으면 남은 바이트가 다음 요청의 시작으로
+        # 해석돼 연결이 어긋난다. 경로를 따지기 전에 먼저 비워 둔다.
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length)
+
+        if parsed.path not in ("/api/label", "/api/flags", "/api/unlabel"):
+            self._json({"error": "not found"}, 404)
+            return
+
+        try:
+            data = json.loads(raw or b"{}")
+            idx = int(data["idx"])
+            s = SAMPLES_BY_IDX[idx]
+        except (ValueError, KeyError, json.JSONDecodeError):
+            self._json({"error": "invalid payload"}, 400)
+            return
+
+        if parsed.path == "/api/flags":
+            self._handle_flags(idx, s, data)
+            return
+
+        if parsed.path == "/api/unlabel":
+            self._handle_unlabel(idx, s)
+            return
+
+        # /api/label — MIC 라디오 선택
+        try:
+            choice = str(data["choice"])
+            mic = choice_to_mic(s, choice)
+        except (KeyError, ValueError) as e:
+            self._json({"error": str(e)}, 400)
+            return
+
+        with _lock:
+            entry = get_entry(s)
+            entry["human_mic"] = mic
+            entry["choice"] = choice
+            save_labels()
+            done = count_done()
+
+        self._json({"ok": True, "idx": idx, "human_mic": mic, "choice": choice, "done": done})
+
+    def _handle_unlabel(self, idx, s):
+        """저장된 MIC를 지운다. ambiguous/TE 플래그도 없으면 항목 자체를 제거."""
+        key = label_key(s)
+        with _lock:
+            entry = get_entry(s)
+            entry["human_mic"] = ""
+            entry["choice"] = ""
+            if not entry["ambiguous"] and not entry["TE"]:
+                del LABELS[key]
+            save_labels()
+            done = count_done()
+
+        self._json({"ok": True, "idx": idx, "human_mic": "", "choice": "", "done": done})
+
+    def _handle_flags(self, idx, s, data):
+        """ambiguous / TE 체크박스 갱신. 플래그·MIC 모두 없으면 항목 제거."""
+        key = label_key(s)
+        with _lock:
+            entry = get_entry(s)
+            if "ambiguous" in data:
+                entry["ambiguous"] = bool(data["ambiguous"])
+            if "TE" in data:
+                entry["TE"] = bool(data["TE"])
+            amb, te = entry["ambiguous"], entry["TE"]
+            if not entry["choice"] and not amb and not te:
+                del LABELS[key]
+            save_labels()
+            done = count_done()
+
+        self._json({"ok": True, "idx": idx, "ambiguous": amb, "TE": te, "done": done})
+
+
+class Server(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+    # 샘플 하나를 열면 셀 이미지 49~70개가 한꺼번에 몰린다. 기본값 5 는 너무 작다.
+    request_queue_size = 128
+
+    def handle_error(self, request, client_address):
+        # 브라우저가 프리페치나 화면 전환 중에 전송 중인 요청을 끊는 건 정상이다.
+        # 기본 구현은 이걸 전부 스택트레이스로 찍어서 콘솔을 덮어 버린다.
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
+
+
+def main():
+    for src in SOURCES:
+        n = sum(1 for s in SAMPLES if s["src_id"] == src["id"])
+        done = sum(
+            1
+            for s in SAMPLES
+            if s["src_id"] == src["id"] and (LABELS.get(label_key(s)) or {}).get("choice")
+        )
+        print(f"[human-labeling] {src['label']}: {done}/{n}")
+    print(f"[human-labeling] samples: {len(SAMPLES)}  labeled: {count_done()}")
+    print(f"[human-labeling] CSV: {CSV_PATH}")
+    print(f"[human-labeling] prefetch: {PREFETCH_AHEAD} ahead / {PREFETCH_WORKERS} workers")
+    print(f"[human-labeling] http://localhost:{PORT}")
+    start_prefetch_workers()
+    Server(("0.0.0.0", PORT), Handler).serve_forever()
+
+
+if __name__ == "__main__":
+    main()
