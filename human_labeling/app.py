@@ -500,7 +500,10 @@ def ensure_cells(sample: dict) -> dict:
         te = None
         tr = sample.get("te_rows")
         if tr and row < len(tr) and tr[row]:
-            te = {"bubble": tr[row][0], "film": tr[row][1]}
+            v = tr[row]
+            te = {"bubble": v[0], "film": v[1],
+                  "collapse": bool(v[2]) if len(v) > 2 else False,
+                  "drop": v[3] if len(v) > 3 else 0}
         rows.append(
             {"label": label, "is_control": is_control, "conc_index": conc_index,
              "cells": cells, "te": te}

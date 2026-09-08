@@ -108,7 +108,11 @@ def main():
         T['k'] = (T.project_id.astype(str) + '|' + T.sample_id.astype(str) + '|'
                   + T.antimicrobial.astype(str) + '|'
                   + pd.to_numeric(T.c, errors='coerce').map(lambda x: f'{x:g}'))
-        te_map = {r.k: (round(float(r.bubble), 3), round(float(r.film), 3))
+        # (bubble, film, collapse, drop) — 뒤 둘은 ★모델과 무관한 궤적 붕괴 신호.
+        # TE 모델이 놓치는 게 많다(599패널 붕괴 233웰 중 195웰을 모델은 조용하다고 봤다).
+        te_map = {r.k: (round(float(r.bubble), 3), round(float(r.film), 3),
+                        bool(getattr(r, 'collapse', False)),
+                        round(float(getattr(r, 'drop', 0) or 0), 3))
                   for r in T.itertuples()}
         print(f'[src25] TE 점수 {len(te_map):,} 웰', flush=True)
     else:

@@ -227,6 +227,7 @@
     border:1px solid transparent; cursor:help; }
   .te-tag.hi  { background:#fde8e8; color:#b42318; border-color:#f0a9a9; }
   .te-tag.mid { background:#fff4e0; color:#a15c00; border-color:#f0cf9a; }
+  .te-tag.col { background:#efe7fb; color:#5b21b6; border-color:#c9b6ee; }
   tr.te-row .row-conc { text-decoration: underline dotted #b42318 2px; }
   .bmd-tag {
     display: none; font-size: 10px; font-weight: 700; color: var(--bmd);
@@ -591,6 +592,15 @@ function teTag(te) {
     const name = k === 'bubble' ? '기포' : '필름';
     parts.push(`<span class="te-tag ${strong ? 'hi' : 'mid'}" title="TE 모델 ${name} ${v.toFixed(3)}` +
                ` (작동점 ${TE_TH[k]})">${name} ${v.toFixed(2)}</span>`);
+  }
+  // ★궤적 붕괴 — TE 모델과 무관하게 object_area 로 계산한다.
+  //   최대 이후 50% 이상 급락 + 미회복. 세포가 이렇게 줄 수 없으니 촬영 아티팩트다.
+  //   모델이 놓치는 게 많아(붕괴 233웰 중 195웰이 모델상 조용) 따로 표시한다.
+  if (te.collapse) {
+    hit = true;
+    const pct = Math.round((te.drop || 0) * 100);
+    parts.push(`<span class="te-tag col" title="object_area 최대 이후 ${pct}% 급락 후 미회복` +
+               ` — 촬영 아티팩트 신호(TE 모델과 무관)">붕괴 ${pct}%</span>`);
   }
   return { html: parts.join(''), hit };
 }
