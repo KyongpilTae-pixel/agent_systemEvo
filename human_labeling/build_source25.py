@@ -142,7 +142,12 @@ def main():
         rows.append(dict(
             project_id=str(r0.project_id), sample_id=str(r0.sample_id),
             antimicrobial=str(r0.antimicrobial),
-            microbial_id=str(r0.microbial_id), organism_group=str(r0.genus),
+            microbial_id=str(r0.microbial_id),
+            # ★genus(Citrobacter) → microbial_id(C. freundii) 는 사실상 같은 정보라
+            #   트리가 두 단계로 내려가 답답했다. 같은 값으로 넣어 UI 가 한 단계로 접게 한다
+            #   (groupPath 가 연속 중복을 걷어낸다). genus 는 아래 컬럼으로 남겨 둔다.
+            organism_group=str(r0.microbial_id),
+            genus=str(r0.genus),
             concentration_list=','.join(concs),
             control_len=ctl_len,
             bmd_mic='' if pd.isna(r0.bmd_mic) else str(r0.bmd_mic),

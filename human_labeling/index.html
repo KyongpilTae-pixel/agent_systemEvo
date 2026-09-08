@@ -372,8 +372,12 @@ let groupOrder = localStorage.getItem('groupOrder');
 if (!GROUP_ORDERS[groupOrder]) groupOrder = 'amr';
 
 /** 샘플이 놓일 트리 경로. 서버가 준 s.group 대신 현재 순서로 조립한다. */
+/** 폴더 경로. ★연속으로 같은 이름이 나오면 한 단계로 접는다.
+ *  2.5 는 genus(Citrobacter)와 microbial_id(C. freundii)가 같은 정보라
+ *  두 단계로 내려가면 클릭만 늘고 얻는 게 없다. 값이 실제로 다른 소스는 그대로 두 단계다. */
 function groupPath(s) {
-  return [s.src_label, ...GROUP_ORDERS[groupOrder].map(k => s[k])];
+  const raw = [s.src_label, ...GROUP_ORDERS[groupOrder].map(k => s[k])];
+  return raw.filter((v, i) => i === 0 || v !== raw[i - 1]);
 }
 
 function setGroupOrder(order) {
