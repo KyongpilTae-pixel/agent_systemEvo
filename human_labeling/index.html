@@ -716,12 +716,15 @@ async function idxFromUrl() {
 // ---------- BMD MIC 토글 ----------
 // 기본은 감춤. 라벨링 중 BMD 값에 끌려가지 않도록 직접 켤 때만 보인다.
 function applyBmdToggle() {
-  const on = localStorage.getItem('showBmd') === '1';
+  // ★기본 표시(2026-09-08 지시). 원래는 감춤이 기본이었다 — 라벨링이 BMD 에 끌려가지 않게 하려던 것.
+  //   지금 용도는 "bmd 가 틀렸나, 이미지가 이상한가"를 가리는 대조 작업이라 보이는 편이 맞다.
+  //   ⚠독립적인 사람 판독이 필요할 때는 `b` 로 꺼 두고 라벨한다.
+  const on = localStorage.getItem('showBmd') !== '0';
   document.body.classList.toggle('show-bmd', on);
   $('#bmdToggle').classList.toggle('on', on);
 }
 function toggleBmd() {
-  localStorage.setItem('showBmd', localStorage.getItem('showBmd') === '1' ? '0' : '1');
+  localStorage.setItem('showBmd', localStorage.getItem('showBmd') !== '0' ? '0' : '1');
   applyBmdToggle();
 }
 function setBmd(d) {
