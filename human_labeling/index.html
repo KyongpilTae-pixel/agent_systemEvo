@@ -50,7 +50,12 @@
   .progress-bar { height: 7px; background: var(--panel2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
   .progress-fill { height: 100%; width: 0%; background: var(--ok); transition: width .25s ease; }
   /* 그룹핑 순서 전환 (약제 우선 / 균종 우선) */
-  #grouping { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+  #subsetWrap { display:flex; align-items:center; gap:8px; margin-top:8px; }
+    #subsetWrap .lb { font-size:12px; color:#8a94a6; flex:0 0 auto; }
+    #subsetFilter { flex:1 1 auto; min-width:0; font-size:12px; padding:4px 6px;
+      border:1px solid #d7dce5; border-radius:6px; background:#fff; color:#1a2330; }
+    #subsetFilter.on { border-color:#2f6fd0; background:#eef4ff; font-weight:600; }
+    #grouping { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
   #grouping .lb { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
   #grouping .segs { display: flex; flex: 1; gap: 4px; }
   #grouping .seg {
@@ -232,6 +237,10 @@
         <span id="progressText">0 / 0 완료</span>
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       </div>
+      <div id="subsetWrap" title="검토 목록만 골라 보기 (단축키 f)">
+        <span class="lb">보기</span>
+        <select id="subsetFilter"><option value="">전체</option></select>
+      </div>
       <div id="grouping" title="사이드바 그룹핑 순서 (단축키 g)">
         <span class="lb">그룹</span>
         <div class="segs">
@@ -282,6 +291,39 @@
 <script>
 const $ = (s, r=document) => r.querySelector(s);
 let SAMPLES = [];
+// ★서브셋 필터 — 검토 목록(운영만 맞힘 등)만 골라 본다. 브라우저에 기억된다.
+let subsetFilter = localStorage.getItem('subsetFilter') || '';
+let lastSubset = localStorage.getItem('lastSubset') || '';
+
+async function loadSubsets() {
+  let d;
+  try { d = await fetchJSON('/api/subsets'); } catch (e) { return; }
+  const sel = $('#subsetFilter');
+  for (const x of (d.subsets || [])) {
+    const o = document.createElement('option');
+    o.value = x.id;
+    o.textContent = `${x.label} (${x.count})`;
+    sel.appendChild(o);
+  }
+  if (subsetFilter && !(d.subsets || []).some(x => x.id === subsetFilter)) subsetFilter = '';
+  sel.value = subsetFilter;
+  sel.classList.toggle('on', !!subsetFilter);
+  sel.addEventListener('change', () => setSubset(sel.value));
+}
+
+function setSubset(v) {
+  subsetFilter = v || '';
+  localStorage.setItem('subsetFilter', subsetFilter);
+  if (subsetFilter) { lastSubset = subsetFilter; localStorage.setItem('lastSubset', lastSubset); }
+  const sel = $('#subsetFilter');
+  sel.value = subsetFilter;
+  sel.classList.toggle('on', !!subsetFilter);
+  renderList();
+  // 보던 샘플이 걸러져 사라졌으면 첫 항목으로 옮긴다(빈 화면 방지).
+  const vis = visibleIdxs();
+  if (vis.length && !vis.includes(curIdx)) selectSample(vis[0]);
+  else if (!vis.length) showToast('이 목록에 해당하는 샘플이 없습니다.');
+}
 let curIdx = null;
 let curData = null;
 
@@ -294,12 +336,20 @@ async function fetchJSON(url, opts) {
 async function loadList() {
   const d = await fetchJSON('/api/samples');
   SAMPLES = d.samples;
-  renderProgress(d.done, d.total);
   renderList();
 }
 
-function renderProgress(done, total) {
+/** 진행률은 **지금 필터에 걸린 범위** 기준으로 센다.
+ *  전체 39,431 중 완료 수를 보여 주면, 599건짜리 검토 목록을 도는 동안 바늘이 안 움직인다. */
+function renderProgress() {
+  const pool = subsetFilter
+    ? SAMPLES.filter(s => (s.subsets || []).includes(subsetFilter))
+    : SAMPLES;
+  const total = pool.length;
+  const done = pool.reduce((n, s) => n + (s.labeled ? 1 : 0), 0);
+  const scope = subsetFilter ? ($('#subsetFilter').selectedOptions[0]?.textContent || '') : '전체';
   $('#progressText').textContent = `${done} / ${total} 완료`;
+  $('#progressText').title = scope;
   $('#progressFill').style.width = total ? (100 * done / total) + '%' : '0%';
 }
 
@@ -403,11 +453,14 @@ function renderNode(node, parentEl, forceOpen) {
 
 function renderList() {
   const q = $('#search').value.trim().toLowerCase();
-  const shown = q ? SAMPLES.filter(s => s.sample_id.toLowerCase().includes(q)) : SAMPLES;
+  let shown = SAMPLES;
+  if (subsetFilter) shown = shown.filter(s => (s.subsets || []).includes(subsetFilter));
+  if (q) shown = shown.filter(s => s.sample_id.toLowerCase().includes(q));
   const list = $('#list');
   list.innerHTML = '';
   const root = buildTree(shown);
   for (const child of sortedChildren(root)) renderNode(child, list, !!q);
+  renderProgress();
 }
 
 /** 해당 샘플이 보이도록 상위 폴더를 모두 펼친다. */
@@ -604,7 +657,7 @@ async function submitLabel(choice) {
     setSaveState(curData);
     updateSampleStatus(curIdx, res.human_mic, choice);
     renderList();
-    renderProgress(res.done, SAMPLES.length);
+    renderProgress();
     // 라디오 하이라이트 갱신
     document.querySelectorAll('.radio-cell').forEach(td => td.classList.remove('checked'));
     const chk = document.querySelector(`input[name="mic"][value="${choice}"]`);
@@ -628,7 +681,7 @@ async function deleteLabel() {
     setSaveState(curData);
     updateSampleStatus(curIdx, '', '');
     renderList();
-    renderProgress(res.done, SAMPLES.length);
+    renderProgress();
     document.querySelectorAll('input[name="mic"]').forEach(inp => { inp.checked = false; });
     document.querySelectorAll('.radio-cell').forEach(td => td.classList.remove('checked'));
     showToast('라벨을 삭제했습니다.');
@@ -780,6 +833,13 @@ document.addEventListener('keydown', (e) => {
 
   if (k === 'd') move(1);
   else if (k === 'a') move(-1);
+  else if (k === 'f') {            // 전체 <-> 직전 서브셋 토글
+    const sel = $('#subsetFilter');
+    const opts = [...sel.options].map(o => o.value).filter(Boolean);
+    if (!opts.length) return;
+    if (subsetFilter) { lastSubset = subsetFilter; setSubset(''); }
+    else setSubset(lastSubset && opts.includes(lastSubset) ? lastSubset : opts[0]);
+  }
   else if (k === 'b') toggleBmd();
   else if (k === 'g') setGroupOrder(groupOrder === 'amr' ? 'org' : 'amr');
   else if (k >= '1' && k <= '9') {
@@ -799,10 +859,15 @@ document.addEventListener('keydown', (e) => {
 (async () => {
   applyBmdToggle();
   applyGroupOrder();
+  await loadSubsets();          // 필터 상태를 먼저 세운다 — 첫 렌더부터 걸러 보이도록
   await loadList();
   const fromUrl = await idxFromUrl();
   if (fromUrl !== null) { selectSample(fromUrl); return; }
-  const firstUnlabeled = SAMPLES.find(s => !s.labeled) || SAMPLES[0];
+  // ★첫 선택도 필터를 따른다. 안 그러면 걸러진 목록인데 엉뚱한 샘플이 열린다.
+  const pool = subsetFilter
+    ? SAMPLES.filter(s => (s.subsets || []).includes(subsetFilter))
+    : SAMPLES;
+  const firstUnlabeled = pool.find(s => !s.labeled) || pool[0];
   if (firstUnlabeled) selectSample(firstUnlabeled.idx);
 })();
 </script>

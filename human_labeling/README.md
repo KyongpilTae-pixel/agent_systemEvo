@@ -34,7 +34,7 @@ cd /home/kptae/project/qnt_algorithm/agent_system/human_labeling
   `Esc`나 화면 클릭으로 닫는다. 확대 중에는 라벨 단축키가 먹지 않아 실수로 저장될 일이 없다.
 - **BMD MIC 토글**: 상단 `BMD MIC` 버튼(단축키 `b`). **기본은 감춤** — 라벨링이 BMD 값에 끌려가지 않도록 직접 켤 때만 보인다.
   켜면 상단에 BMD 값이 뜨고, `bmd_mic_order`에 해당하는 농도 행이 보라색 `BMD` 태그와 테두리로 표시된다. 켠 상태는 브라우저에 기억된다.
-- **단축키**: `d`/`a` 다음·이전 샘플, `1~9` 농도 라디오 선택, `0` 전 농도 성장, `b` BMD MIC 표시/감춤, `g` 그룹핑 순서 전환.
+- **단축키**: `f` **서브셋 필터 토글**, `d`/`a` 다음·이전 샘플, `1~9` 농도 라디오 선택, `0` 전 농도 성장, `b` BMD MIC 표시/감춤, `g` 그룹핑 순서 전환.
 
 ## 특정 샘플 바로 열기 (주소 공유)
 주소창은 항상 현재 보고 있는 샘플을 반영한다. 그 주소를 복사해 두거나 남에게 주면 같은 화면이 바로 열린다.
@@ -62,7 +62,36 @@ http://localhost:5057/?project_id=202308_FDA_Clinical_USA&sample_id=1010-QMX-IUP
 | **Reproducibility** | 19,008 | `analytical/FDA_Analytical_reproducibility_exceptGN26_df_260624.parquet` · `analytical/FDA_Analytical_reproducibility_MEVtruncation_allInfo_260416.csv` |
 | **Sample_Stability** | 1,831 | `analytical/FDA_Analytical_sample_stability_df_260723_DelOutlier_with_BMD.parquet` · `analytical/FDA_Analytical_sample_stability_allInfo_new_260723.csv` |
 
-**총 38,832건.**
+| **dRAST2.5_d170** | 599 | `d25/d170_label_source.parquet` (`build_source25.py` 로 생성) |
+
+**총 39,431건.**
+
+### ★2.5(d170)는 형식이 다르다
+| | 3.0 세 소스 | **2.5 d170** |
+|---|---|---|
+| 이미지 | 패널당 `.safetensors` 한 덩어리 `(N,1,224,224)` | **웰마다 PNG 7장** |
+| 셀 만들기 | 텐서 블록을 잘라 PNG 저장 | **PNG 를 그대로 복사**(224×119, 리사이즈 안 함) |
+| 균종·BMD | allinfo CSV 를 merge | d170 CSV 에 이미 있음(merge 생략) |
+| `bmd_mic_order` | df 컬럼 | **`bmd_mic`+농도배열로 계산**(0=최저 · 14=전 농도 성장) |
+
+`SOURCES` 의 `loader` 가 `"png25"` 면 이 경로를 탄다. `allinfo: None` 이면 merge 를 건너뛴다.
+소스 갱신은 `python build_source25.py`.
+
+## ★서브셋 — "이것만 보기"
+
+사이드바 위 **`보기`** 드롭다운으로 검토 목록만 걸러 본다. 단축키 **`f`** 는 전체 ↔ 직전 서브셋 토글.
+필터는 브라우저에 기억되고, **`d`/`a` 이동·프리페치·진행률이 모두 걸러진 범위를 따른다**
+(진행률을 전체 39,431 기준으로 두면 599건 목록을 도는 동안 바늘이 안 움직인다).
+
+| 서브셋 | 건수 | 무엇인가 |
+|---|---|---|
+| `op_only` **운영만 맞힘(EN)** | 218 | 운영은 EA 통과인데 구조모델이 틀린 패널. 구조 교체의 **실제 비용** |
+| `allwrong` **전 구조 실패 웰 포함** | 425 | 18개 구조가 **전부** 틀린 웰(628개)이 든 패널. bmd↔이미지 방향 충돌 층 |
+| `te_suspect` **TE 기술오류 의심** | 16 | 2.5 전용 TE 모델이 버블/필름으로 지목한 웰이 든 패널 |
+
+**새 목록을 추가하려면** `subsets/<id>.csv` 에 `project_id,sample_id,antimicrobial` 세 컬럼으로 떨구고
+서버를 재기동하면 자동으로 잡힌다. 이름은 `app.py` 의 `SUBSET_LABELS` 에 넣는다(없으면 id 가 그대로 뜬다).
+⚠서브셋은 **패널 단위**다 — 웰 단위 목록(628 웰)은 그 웰이 속한 패널로 접혀 425개가 된다.
 
 ⚠**safetensors 이미지는 복사하지 않았다.** parquet 의 `image_safetensors_path` 가
 `/home/gyuyoung/safetensors/...` 를 가리키고 **읽기 권한이 있어 그대로 참조**한다(전체 ~74GB).
@@ -90,6 +119,8 @@ allinfo가 수백 MB라 필요한 4개 컬럼만 뽑아 `.cache/<id>_bugmap.parq
 ## 폴더 구성
 - `app.py`, `index.html` — 서버 / UI
 - `prefetch.py` — 대량 프리페치
+- `build_source25.py` — 2.5 소스·서브셋 생성
+- `subsets/*.csv` — 서브셋 정의
 - `image_mic_labels.csv` — 라벨 출력 (단일 파일). **빈 상태에서 시작한다** —
   원본에 있던 gyuyoung 님 라벨은 가져오지 않았다(라벨러가 섞이면 안 된다).
   필요하면 `/home/gyuyoung/project/lab/human_labeling/image_mic_labels.csv` 를 참조용으로 따로 읽는다.

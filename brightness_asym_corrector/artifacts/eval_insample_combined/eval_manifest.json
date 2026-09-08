@@ -1,0 +1,31 @@
+{
+  "mode": "combined",
+  "params": {
+    "objective": "binary",
+    "metric": "auc",
+    "learning_rate": 0.05,
+    "num_leaves": 15,
+    "min_data_in_leaf": 10,
+    "feature_fraction": 0.9,
+    "bagging_fraction": 0.9,
+    "bagging_freq": 1,
+    "verbose": -1
+  },
+  "rounds": 300,
+  "all_pass": {
+    "baseline": 103,
+    "corrected": 107,
+    "delta": 4
+  },
+  "bright_cells": 45,
+  "bright_pass_gain": 4,
+  "bright_pass_loss": 0,
+  "bright_EA_up": 8,
+  "bright_EA_down": 2,
+  "bright_CA_up": 6,
+  "bright_CA_down": 3,
+  "bright_mean_dEAp": 0.001,
+  "bright_mean_dCAp": 0.0034,
+  "bright_mean_dVMEp": -0.0283,
+  "mean_insample_auroc": 0.9934
+}

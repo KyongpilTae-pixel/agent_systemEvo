@@ -66,6 +66,16 @@ SOURCES = [
         "FDA_Analytical_reproducibility_MEVtruncation_allInfo_260416.csv",
     },
     {
+        # ★2.5(d170) — 3.0 세 소스와 입력 형식이 다르다.
+        #   3.0 = 패널당 safetensors 한 덩어리 / 2.5 = 웰마다 PNG 7장.
+        #   그래서 loader 를 나누고, allinfo merge 도 하지 않는다(d170 CSV 에 균종·bmd 가 이미 있다).
+        "id": "d25",
+        "label": "dRAST2.5_d170",
+        "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/d170_label_source.parquet",
+        "allinfo": None,
+    },
+    {
         "id": "sample_stability",
         "label": "Sample_Stability",
         "parquet": "/home/kptae/data/allinfo/analytical/"
@@ -80,6 +90,43 @@ SOURCES = [
 # 스크리닝 판정이라 라디오 눈금과 대응되지 않는다. 참고할 수 없는 값이므로
 # 아예 내보내지 않는다.
 BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
+
+# ★서브셋 — "이것만 보기" 로 거르는 이름표. subsets/<id>.csv 에
+#   project_id,sample_id,antimicrobial 세 컬럼. 패널 단위이고 여러 개가 겹칠 수 있다.
+#   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
+SUBSET_DIR = os.path.join(HERE, "subsets")
+SUBSET_LABELS = {
+    "allwrong": "전 구조 실패 웰 포함",
+    "op_only": "운영만 맞힘(EN)",
+    "te_suspect": "TE 기술오류 의심",
+}
+
+
+def load_subsets() -> dict:
+    """subsets/*.csv -> {subset_id: {(project_id, sample_id, antimicrobial), ...}}"""
+    out = {}
+    if not os.path.isdir(SUBSET_DIR):
+        return out
+    for fn in sorted(os.listdir(SUBSET_DIR)):
+        if not fn.endswith(".csv"):
+            continue
+        sid = fn[:-4]
+        try:
+            df = pd.read_csv(os.path.join(SUBSET_DIR, fn), dtype=str).fillna("")
+        except Exception:  # noqa: BLE001 — 깨진 CSV 하나 때문에 서버가 죽지 않게 한다
+            continue
+        need = {"project_id", "sample_id", "antimicrobial"}
+        if not need <= set(df.columns):
+            continue
+        out[sid] = {
+            (r.project_id.strip(), r.sample_id.strip(), r.antimicrobial.strip())
+            for r in df.itertuples()
+        }
+    return out
+
+
+SUBSETS = load_subsets()
+
 
 # 라벨 결과는 균종·약제 구분 없이 이 파일 하나로 관리한다.
 CSV_PATH = os.path.join(HERE, "image_mic_labels.csv")
@@ -192,12 +239,20 @@ def load_samples() -> list[dict]:
     samples = []
     used_keys = set()
     for src in SOURCES:
-        bugmap, bmdmap = load_allinfo_maps(src)
         df = pd.read_parquet(src["parquet"])
-        # 균종 컬럼이 parquet 에도 있으면 merge 가 _x/_y 로 쪼개지므로, allinfo 쪽을 쓰도록 미리 버린다
-        df = df.drop(columns=[c for c in ("organism_group", "microbial_id") if c in df.columns])
-        df = df.merge(bugmap, on=["project_id", "sample_id"], how="left")
-        df = df.merge(bmdmap, on=["project_id", "sample_id", "antimicrobial"], how="left")
+        if src.get("allinfo"):
+            bugmap, bmdmap = load_allinfo_maps(src)
+            # 균종 컬럼이 parquet 에도 있으면 merge 가 _x/_y 로 쪼개지므로, allinfo 쪽을 쓰도록 미리 버린다
+            df = df.drop(columns=[c for c in ("organism_group", "microbial_id") if c in df.columns])
+            df = df.merge(bugmap, on=["project_id", "sample_id"], how="left")
+            df = df.merge(bmdmap, on=["project_id", "sample_id", "antimicrobial"], how="left")
+        # ★allinfo 가 없는 소스(2.5 d170)는 parquet 이 이미 균종·bmd 를 들고 있다.
+        for c in ("organism_group", "microbial_id"):
+            if c not in df.columns:
+                df[c] = "Unknown"
+        for c in ("bmd_mic", "bmd_mic_order"):
+            if c not in df.columns:
+                df[c] = ""
         df[["organism_group", "microbial_id"]] = df[["organism_group", "microbial_id"]].fillna(
             "Unknown"
         )
@@ -209,9 +264,17 @@ def load_samples() -> list[dict]:
         for row in df.to_dict("records"):
             conc_raw = str(row["concentration_list"])
             concentrations = [c.strip() for c in conc_raw.split(",") if c.strip() != ""]
-            path = str(row["image_safetensors_path"])
-            m = re.search(r"_(\d+)control", os.path.basename(path))
-            control_len = int(m.group(1)) if m else 1
+            loader = src.get("loader", "safetensors")
+            if loader == "png25":
+                # 2.5 는 웰마다 PNG 7장이다. 경로 격자(행×시점)를 그대로 들고 간다.
+                path = ""
+                png_frames = json.loads(row["png_frames"])
+                control_len = int(row["control_len"])
+            else:
+                path = str(row["image_safetensors_path"])
+                png_frames = None
+                m = re.search(r"_(\d+)control", os.path.basename(path))
+                control_len = int(m.group(1)) if m else 1
             sample_id = str(row["sample_id"])
             antimicrobial = str(row["antimicrobial"])
             hide_bmd = antimicrobial in BMD_HIDDEN_DRUGS
@@ -241,8 +304,14 @@ def load_samples() -> list[dict]:
                     # df의 bmd_mic_order는 image_mic_order와 같은 눈금(0=최저농도, 14=전 농도 성장)
                     "bmd_choice": "" if hide_bmd else order_to_choice(row["bmd_mic_order"]),
                     "path": path,
+                    "loader": loader,
+                    "png_frames": png_frames,
                     "control_len": control_len,
                     "key": key,
+                    "subsets": sorted(
+                        sid for sid, keys in SUBSETS.items()
+                        if (str(row["project_id"]), sample_id, antimicrobial) in keys
+                    ),
                 }
             )
     return samples
@@ -365,8 +434,17 @@ def _cell_lock(key: str) -> threading.Lock:
 
 
 def _cache_stale(sample: dict, done_flag: str) -> bool:
-    """safetensors 가 캐시보다 새로우면(데이터 갱신) 캐시를 버린다."""
+    """원본이 캐시보다 새로우면(데이터 갱신) 캐시를 버린다.
+
+    2.5(png25)는 safetensors 가 없으므로 **첫 프레임 PNG** 의 mtime 을 본다.
+    """
     try:
+        if sample.get("loader") == "png25":
+            grid = sample.get("png_frames") or []
+            first = next((c for r in grid for c in r if c), None)
+            if not first:
+                return False
+            return os.path.getmtime(done_flag) < os.path.getmtime(first)
         return os.path.getmtime(done_flag) < os.path.getmtime(sample["path"])
     except OSError:
         # 원본이 없으면 이미 뽑아 둔 캐시라도 그대로 쓴다
@@ -441,18 +519,36 @@ def _extract_cells(sample: dict, out_dir: str, done_flag: str, n_rows: int):
         for f in os.listdir(out_dir):
             os.remove(os.path.join(out_dir, f))
     if not os.path.exists(done_flag):
-        if not os.path.exists(sample["path"]):
-            raise FileNotFoundError(f"safetensors 없음: {sample['path']}")
         os.makedirs(out_dir, exist_ok=True)
-        with safe_open(sample["path"], "numpy") as f:
-            arr = f.get_tensor("image")  # (N, 1, H, W) uint8
-        total = arr.shape[0]
-        time_len = total // n_rows
-        for idx in range(total):
-            row = idx // time_len
-            col = idx % time_len
-            cell = arr[idx, 0]
-            Image.fromarray(cell, "L").save(os.path.join(out_dir, f"r{row}_t{col}.png"))
+        if sample.get("loader") == "png25":
+            # ★2.5 — 웰마다 PNG 가 이미 디스크에 있다. 잘라낼 게 없어 **그대로 복사**한다.
+            #   원본이 224x119 비정방형이라 리사이즈하지 않는다(왜곡 금지).
+            #   경로가 비면(구형 레이아웃 등) 검은 칸을 채워 격자를 유지한다.
+            grid = sample["png_frames"]
+            time_len = max((len(r) for r in grid), default=0)
+            for row, fr in enumerate(grid):
+                for col in range(time_len):
+                    dst = os.path.join(out_dir, f"r{row}_t{col}.png")
+                    src_p = fr[col] if col < len(fr) else None
+                    if src_p and os.path.exists(src_p):
+                        try:
+                            Image.open(src_p).convert("L").save(dst)
+                            continue
+                        except Exception:  # noqa: BLE001 — 깨진 파일은 빈 칸으로
+                            pass
+                    Image.new("L", (224, 119), 0).save(dst)
+        else:
+            if not os.path.exists(sample["path"]):
+                raise FileNotFoundError(f"safetensors 없음: {sample['path']}")
+            with safe_open(sample["path"], "numpy") as f:
+                arr = f.get_tensor("image")  # (N, 1, H, W) uint8
+            total = arr.shape[0]
+            time_len = total // n_rows
+            for idx in range(total):
+                row = idx // time_len
+                col = idx % time_len
+                cell = arr[idx, 0]
+                Image.fromarray(cell, "L").save(os.path.join(out_dir, f"r{row}_t{col}.png"))
         # .done 은 마지막에 써서, 중간에 죽으면 다음 실행이 다시 추출하도록 한다
         with open(done_flag, "w") as f:
             f.write(json.dumps({"time_len": time_len, "n_rows": n_rows}))
@@ -599,6 +695,8 @@ class Handler(BaseHTTPRequestHandler):
             "choice": lab["choice"] if lab else "",
             "ambiguous": bool(lab and lab.get("ambiguous")),
             "TE": bool(lab and lab.get("TE")),
+            # 이 샘플이 속한 서브셋들. 사이드바 "이것만 보기" 필터가 쓴다.
+            "subsets": s["subsets"],
         }
 
     # ---- GET ----
@@ -610,6 +708,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/" or path == "/index.html":
             with open(INDEX_HTML, "rb") as f:
                 self._bytes(f.read(), "text/html; charset=utf-8")
+            return
+
+        if path == "/api/subsets":
+            self._json({
+                "subsets": [
+                    {"id": sid,
+                     "label": SUBSET_LABELS.get(sid, sid),
+                     "count": sum(1 for x in SAMPLES if sid in x["subsets"])}
+                    for sid in sorted(SUBSETS)
+                ]
+            })
             return
 
         if path == "/api/samples":
