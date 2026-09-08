@@ -152,6 +152,23 @@ TE 모델은 `기포 0.256` 으로 작동점(0.41) 아래였다. 붕괴 배지�
 allinfo가 수백 MB라 필요한 4개 컬럼만 뽑아 `.cache/<id>_bugmap.parquet`에 캐싱하며, allinfo 파일이 더 새로우면 자동으로 다시 만든다.
 한 sample에 값이 여러 개면 임의로 고르지 않고 ` / `로 이어붙여(예: `Klebsiella pneumoniae / Klebsiella variicola`) 모호함이 트리에 그대로 보이게 한다.
 
+## ⚠idx 는 소스 순번이다 — 소스를 다시 만들면 밀린다
+
+`idx` 는 `SOURCES` 를 읽은 **순서**다(`"idx": len(samples)`). 서브셋을 추가해 소스 parquet 를
+다시 만들면 순번이 통째로 바뀌고, **열어 둔 브라우저 탭은 옛 순번을 들고 있다**.
+그 상태로 저장하면 **다른 패널에 라벨이 붙는다** (2026-09-08 실제 발생).
+
+- **가드** — 저장 요청에 패널 신원 `pkey`(`project_id|sample_id|antimicrobial`)와
+  소스 버전(`version`)을 실어 보내고, 서버가 어긋나면 **409** 로 거부한다.
+- **작업 중에는 소스를 다시 만들지 않는다.** 서브셋 추가는 모아서 한 번에 하고,
+  다시 만든 뒤에는 **브라우저 새로고침**을 알린다.
+- **무결성 점검** — 라벨은 `(project_id, sample_id, antimicrobial)` 로 저장되므로
+  `image_mic_order` 가 그 패널의 농도 개수를 벗어나면 밀림이다. `TE_wells` 토큰도 같다.
+
+## 라벨 백업
+`/home/kptae/data/human_labeling_backup/image_mic_labels_<타임스탬프>.csv`.
+CSV 는 git 밖(gitignore)이라 **작업 구간마다 백업**한다.
+
 ## 출력
 **균종·약제 구분 없이 `image_mic_labels.csv` 파일 하나**로 관리된다. 라벨할 때마다 갱신되며 재실행 시 이어서 작업 가능.
 

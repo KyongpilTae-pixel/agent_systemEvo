@@ -338,6 +338,20 @@ def load_samples() -> list[dict]:
     return samples
 
 
+def source_version() -> str:
+    """소스 parquet 들의 mtime 합. ★idx 는 순번이라 소스가 바뀌면 통째로 밀린다.
+    열어 둔 브라우저가 옛 idx 로 저장하면 **다른 패널에 라벨이 붙는다**(2026-09-08 실제 발생).
+    클라이언트가 이 값을 들고 있다가 다르면 저장을 거부하고 새로고침을 요구한다."""
+    v = []
+    for src in SOURCES:
+        try:
+            v.append(str(int(os.path.getmtime(src["parquet"]))))
+        except OSError:
+            v.append("0")
+    return "-".join(v)
+
+
+SOURCE_VERSION = source_version()
 SAMPLES = load_samples()
 SAMPLES_BY_IDX = {s["idx"]: s for s in SAMPLES}
 
@@ -759,6 +773,7 @@ class Handler(BaseHTTPRequestHandler):
             done = count_done()
             self._json(
                 {
+                    "version": SOURCE_VERSION,
                     "total": total,
                     "done": done,
                     "samples": [self._sample_status(s) for s in SAMPLES],
@@ -891,6 +906,22 @@ class Handler(BaseHTTPRequestHandler):
             s = SAMPLES_BY_IDX[idx]
         except (ValueError, KeyError, json.JSONDecodeError):
             self._json({"error": "invalid payload"}, 400)
+            return
+
+        # ★idx 는 소스 순번이라 소스를 다시 만들면 통째로 밀린다.
+        #   열어 둔 탭이 옛 idx 로 저장하면 **다른 패널에 라벨이 붙는다**(2026-09-08 실제 발생).
+        #   그래서 클라이언트가 보낸 패널 신원(pkey)·소스 버전을 대조하고, 어긋나면 거부한다.
+        pkey = data.get("pkey")
+        want = f'{s["project_id"]}|{s["sample_id"]}|{s["antimicrobial"]}'
+        if pkey and pkey != want:
+            self._json({"error": "stale",
+                        "message": "소스가 바뀌어 순번이 밀렸습니다. 새로고침 후 다시 라벨하세요.",
+                        "expected": want, "got": pkey}, 409)
+            return
+        ver = data.get("version")
+        if ver and ver != SOURCE_VERSION:
+            self._json({"error": "stale",
+                        "message": "소스가 갱신됐습니다. 새로고침 후 다시 라벨하세요."}, 409)
             return
 
         if parsed.path == "/api/flags":
