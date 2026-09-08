@@ -150,6 +150,9 @@ CSV_FIELDS = [
     "image_mic_order",
     "ambiguous",
     "TE",
+    # ★웰(농도) 단위 TE. 패널 TE 와 별개다 — 패널 전체가 아니라 "이 칸만" 이상할 때 쓴다.
+    #   토큰: 농도 행 `c<i>`(0=최저농도) · control 행 `k<i>`(0=첫 control). 예: "k1 c0 c3"
+    "TE_wells",
 ]
 
 
@@ -383,6 +386,7 @@ def load_labels() -> dict:
                     "choice": order_to_choice(r.get("image_mic_order", r.get("choice", ""))),
                     "ambiguous": _truthy(r.get("ambiguous", "")),
                     "TE": _truthy(r.get("TE", "")),
+                    "TE_wells": [t for t in str(r.get("TE_wells", "")).split() if t],
                 }
     return labels
 
@@ -411,6 +415,7 @@ def save_labels():
                         "image_mic_order": choice_to_order(lab["choice"]),
                         "ambiguous": "1" if lab.get("ambiguous") else "0",
                         "TE": "1" if lab.get("TE") else "0",
+                        "TE_wells": " ".join(lab.get("TE_wells") or []),
                     }
                 )
     os.replace(tmp, CSV_PATH)
@@ -420,7 +425,8 @@ def get_entry(sample: dict) -> dict:
     """샘플의 라벨 항목을 반환 (없으면 기본값으로 새로 생성)."""
     key = label_key(sample)
     if key not in LABELS:
-        LABELS[key] = {"human_mic": "", "choice": "", "ambiguous": False, "TE": False}
+        LABELS[key] = {"human_mic": "", "choice": "", "ambiguous": False, "TE": False,
+                       "TE_wells": []}
     return LABELS[key]
 
 
@@ -717,6 +723,7 @@ class Handler(BaseHTTPRequestHandler):
             "choice": lab["choice"] if lab else "",
             "ambiguous": bool(lab and lab.get("ambiguous")),
             "TE": bool(lab and lab.get("TE")),
+            "TE_wells": (lab.get("TE_wells") if lab else []) or [],
             # 이 샘플이 속한 서브셋들. 사이드바 "이것만 보기" 필터가 쓴다.
             "subsets": s["subsets"],
         }
@@ -802,6 +809,7 @@ class Handler(BaseHTTPRequestHandler):
                         "bmd_choice": s["bmd_choice"],
                         "ambiguous": bool(lab and lab.get("ambiguous")),
                         "TE": bool(lab and lab.get("TE")),
+            "TE_wells": (lab.get("TE_wells") if lab else []) or [],
                         "error": str(e),
                     },
                     200,
@@ -825,6 +833,7 @@ class Handler(BaseHTTPRequestHandler):
                     "choice": lab["choice"] if lab else "",
                     "ambiguous": bool(lab and lab.get("ambiguous")),
                     "TE": bool(lab and lab.get("TE")),
+            "TE_wells": (lab.get("TE_wells") if lab else []) or [],
                     "prefetch": warm,
                 }
             )
@@ -928,13 +937,21 @@ class Handler(BaseHTTPRequestHandler):
                 entry["ambiguous"] = bool(data["ambiguous"])
             if "TE" in data:
                 entry["TE"] = bool(data["TE"])
+            # ★웰 단위 TE — {"te_well": "c0", "on": true} 로 한 칸씩 토글한다.
+            if "te_well" in data:
+                w = str(data["te_well"])
+                cur = set(entry.get("TE_wells") or [])
+                cur.add(w) if data.get("on") else cur.discard(w)
+                entry["TE_wells"] = sorted(cur, key=lambda t: (t[0], int(t[1:] or 0)))
             amb, te = entry["ambiguous"], entry["TE"]
-            if not entry["choice"] and not amb and not te:
+            wells = entry.get("TE_wells") or []
+            if not entry["choice"] and not amb and not te and not wells:
                 del LABELS[key]
             save_labels()
             done = count_done()
 
-        self._json({"ok": True, "idx": idx, "ambiguous": amb, "TE": te, "done": done})
+        self._json({"ok": True, "idx": idx, "ambiguous": amb, "TE": te,
+                    "TE_wells": wells, "done": done})
 
 
 class Server(ThreadingHTTPServer):

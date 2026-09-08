@@ -228,6 +228,16 @@
   .te-tag.hi  { background:#fde8e8; color:#b42318; border-color:#f0a9a9; }
   .te-tag.mid { background:#fff4e0; color:#a15c00; border-color:#f0cf9a; }
   .te-tag.col { background:#efe7fb; color:#5b21b6; border-color:#c9b6ee; }
+  /* ★사람이 켜는 웰 단위 TE 토글. 위 배지들은 모델·규칙 출력이고 이건 사람 판정이다. */
+  .te-well { display:inline-block; font-size:10px; font-weight:700; line-height:1.5;
+    padding:0 5px; border-radius:4px; margin-right:4px; vertical-align:middle;
+    border:1px dashed #c3cad6; background:#fff; color:#98a2b3; cursor:pointer;
+    user-select:none; }
+  .te-well:hover { border-color:#b42318; color:#b42318; }
+  .te-well.on { background:#b42318; border:1px solid #b42318; color:#fff; }
+  tr.te-well-row { background:#fff5f5; }
+  .te-well-count { font-size:11px; font-weight:700; color:#b42318;
+    background:#fde8e8; border:1px solid #f0a9a9; border-radius:5px; padding:1px 6px; }
   tr.te-row .row-conc { text-decoration: underline dotted #b42318 2px; }
   .bmd-tag {
     display: none; font-size: 10px; font-weight: 700; color: var(--bmd);
@@ -271,6 +281,7 @@
       <div id="flags">
         <label class="flag amb"><input type="checkbox" id="flagAmbiguous"> Ambiguous</label>
         <label class="flag te"><input type="checkbox" id="flagTE"> TE</label>
+        <span id="teWellCount" class="te-well-count" hidden></span>
       </div>
       <div id="bmdBox"><span class="lb">BMD</span><span id="bmdVal">—</span></div>
       <div class="spacer"></div>
@@ -605,8 +616,21 @@ function teTag(te) {
   return { html: parts.join(''), hit };
 }
 
+let TE_WELLS = new Set();
+
+/** 상단에 "웰 TE n칸" 을 띄운다. 패널 TE 체크박스와 별개임을 눈에 보이게 하려는 것. */
+function updateTeWellCount() {
+  const el = $('#teWellCount');
+  if (!el) return;
+  el.hidden = TE_WELLS.size === 0;
+  el.textContent = `웰 TE ${TE_WELLS.size}칸`;
+  el.title = [...TE_WELLS].join(' ');
+}
+
 function renderGrid(d) {
   const canvas = $('#canvas');
+  TE_WELLS = new Set(d.TE_wells || []);
+  let ctlSeen = 0;
   const T = d.time_len;
   let html = '<table class="grid"><thead><tr>';
   html += '<th></th>';                                   // conc label col
@@ -616,9 +640,15 @@ function renderGrid(d) {
   d.rows.forEach((row, r) => {
     const isBmd = !row.is_control && d.bmd_choice === 'c' + row.conc_index;
     const te = teTag(row.te);
-    const cls = [isBmd ? 'bmd-row' : '', te.hit ? 'te-row' : ''].filter(Boolean).join(' ');
+    // 웰 토큰: control 은 k<순번>, 농도는 c<농도인덱스>
+    const tok = row.is_control ? 'k' + ctlSeen++ : 'c' + row.conc_index;
+    const onWell = TE_WELLS.has(tok);
+    const cls = [isBmd ? 'bmd-row' : '', te.hit ? 'te-row' : '',
+                 onWell ? 'te-well-row' : ''].filter(Boolean).join(' ');
     html += `<tr${cls ? ` class="${cls}"` : ''}>`;
     html += `<td class="row-conc${row.is_control ? ' cont' : ''}">` +
+            `<span class="te-well${onWell ? ' on' : ''}" data-well="${tok}"` +
+            ` title="이 칸을 기술오류로 표시 (사람 판정)">TE</span>` +
             (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + te.html + `${row.label}</td>`;
     row.cells.forEach((src, t) => {
       html += `<td class="cell"><img loading="lazy" src="${src}" data-r="${r}" data-t="${t}"></td>`;
@@ -648,6 +678,24 @@ function renderGrid(d) {
 
   canvas.innerHTML = html;
   applyZoom();
+  canvas.querySelectorAll('.te-well').forEach(el => {
+    el.onclick = async (ev) => {
+      ev.stopPropagation();
+      const w = el.dataset.well;
+      const on = !TE_WELLS.has(w);
+      on ? TE_WELLS.add(w) : TE_WELLS.delete(w);
+      el.classList.toggle('on', on);
+      el.closest('tr').classList.toggle('te-well-row', on);
+      const res = await fetchJSON('/api/flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idx: curIdx, te_well: w, on }),
+      });
+      if (res && res.TE_wells) TE_WELLS = new Set(res.TE_wells);
+      updateTeWellCount();
+    };
+  });
+  updateTeWellCount();
 
   canvas.querySelectorAll('input[name="mic"]').forEach(inp => {
     inp.onchange = () => submitLabel(inp.value);

@@ -155,7 +155,8 @@ allinfo가 수백 MB라 필요한 4개 컬럼만 뽑아 `.cache/<id>_bugmap.parq
 | image_mic | Image MIC (예: `<=0.06`, `0.5`, `>=32`) |
 | image_mic_order | MIC 농도 순서 (0=최저농도, `all_growth`=14) |
 | ambiguous | ambiguous 플래그 (1/0) |
-| TE | Technical Error 플래그 (1/0) |
+| TE | Technical Error 플래그 — **패널 단위** (1/0) |
+| TE_wells | ★**웰 단위** TE. 공백 구분 토큰 (`c<농도인덱스>` · `k<control순번>`). 예: `k1 c0 c3` |
 
 ## 폴더 구성
 - `app.py`, `index.html` — 서버 / UI
