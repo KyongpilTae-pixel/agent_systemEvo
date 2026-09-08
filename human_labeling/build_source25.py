@@ -83,6 +83,17 @@ def main():
         subs['te_suspect'] = (T[flag][['project_id', 'sample_id', 'drug']]
                               .rename(columns={'drug': 'antimicrobial'}).drop_duplicates())
     os.makedirs(SUBDIR, exist_ok=True)
+    # ★손으로 떨궈 둔 서브셋 CSV 도 대상에 포함한다(자동 발견).
+    #   안 그러면 새 서브셋을 만들어도 패널이 소스에 없어 트리에 안 뜬다.
+    for fn in sorted(os.listdir(SUBDIR)):
+        if not fn.endswith('.csv') or fn[:-4] in subs:
+            continue
+        try:
+            v = pd.read_csv(f'{SUBDIR}/{fn}', dtype=str).fillna('')
+        except Exception:
+            continue
+        if {'project_id', 'sample_id', 'antimicrobial'} <= set(v.columns):
+            subs[fn[:-4]] = v[['project_id', 'sample_id', 'antimicrobial']].drop_duplicates()
     for k, v in subs.items():
         v = v.astype(str)
         v.to_csv(f'{SUBDIR}/{k}.csv', index=False, encoding='utf-8-sig')

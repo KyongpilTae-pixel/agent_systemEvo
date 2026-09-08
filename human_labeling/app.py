@@ -109,6 +109,10 @@ SUBSET_LABELS = {
     "allwrong": "전 구조 실패 웰 포함",
     "op_only": "운영만 맞힘(EN)",
     "te_suspect": "TE 기술오류 의심",
+    "skip_growth": "skip growth (물리 위반)",
+    # ★사람이 직접 고른 skip 기준 사례. 판단이 명백한 것만 모은다.
+    #   ⚠평가셋(EN·비학습) 밖도 섞여 있다 — 라벨/육안 확인용이지 모델 채점용이 아니다.
+    "skip_ref": "★skip 기준 사례",
 }
 
 
