@@ -228,6 +228,13 @@
   .te-tag.hi  { background:#fde8e8; color:#b42318; border-color:#f0a9a9; }
   .te-tag.mid { background:#fff4e0; color:#a15c00; border-color:#f0cf9a; }
   .te-tag.col { background:#efe7fb; color:#5b21b6; border-color:#c9b6ee; }
+  /* ★모델 판정 — 사람 판독과 섞이지 않게 회색 계열로 둔다. 참고용이지 정답이 아니다. */
+  .mj { display:inline-block; font-size:10px; font-weight:700; line-height:1.5;
+    padding:0 4px; border-radius:4px; margin-right:3px; vertical-align:middle;
+    border:1px solid #dde5f0; background:#f4f7fb; color:#5a6b82; cursor:help; }
+  .mj.g  { color:#1a7f37; border-color:#bfe3c8; background:#eefaf1; }
+  .mj.ng { color:#b42318; border-color:#f0c9c9; background:#fdf0f0; }
+  .mj.split { border-style:dashed; font-weight:800; }
   /* ★사람이 켜는 웰 단위 TE 토글. 위 배지들은 모델·규칙 출력이고 이건 사람 판정이다. */
   .te-well { display:inline-block; font-size:10px; font-weight:700; line-height:1.5;
     padding:0 5px; border-radius:4px; margin-right:4px; vertical-align:middle;
@@ -284,6 +291,8 @@
         <span id="teWellCount" class="te-well-count" hidden></span>
       </div>
       <div id="bmdBox"><span class="lb">BMD</span><span id="bmdVal">—</span></div>
+      <div id="micBox" hidden><span class="lb">운영</span><span id="opMic">—</span>
+        <span class="lb">cdn_6h</span><span id="cdnMic">—</span></div>
       <div class="spacer"></div>
       <button class="btn" id="bmdToggle" title="BMD MIC 표시/감춤">BMD MIC<span class="kbd">b</span></button>
       <div class="zoom">
@@ -521,6 +530,7 @@ async function selectSample(idx) {
   renderTitle(d);
   setFlags(d);
   setBmd(d);
+  setModelMic(d);
   syncUrl(d);
   if (d.error) {
     canvas.innerHTML = `<div id="err">이미지를 불러오지 못했습니다.\n${d.error}</div>`;
@@ -590,6 +600,22 @@ function setSaveState(d) {
 
 /** TE 점수 -> 배지. 작동점은 검증셋에서 잡은 값(bubble 0.41 / film 0.31)을 쓰고,
  *  그 아래 0.15 까지는 옅은 색으로 "약한 신호"만 표시한다. 판단은 사람이 한다. */
+/** 모델 판정 배지 — `운영` 과 `cdn` 을 나란히. 갈리면 점선 테두리로 눈에 띄게 한다.
+ *  ★참고 표시일 뿐 정답이 아니다. 사람 판독이 모델에 끌려가지 않도록 회색 계열로 둔다. */
+function mjTag(mj) {
+  if (!mj) return '';
+  const cls = v => v === 'G' ? 'g' : (v === 'NG' ? 'ng' : '');
+  const split = mj.op && mj.cdn && mj.op !== mj.cdn;
+  const parts = [];
+  if (mj.op) parts.push(`<span class="mj ${cls(mj.op)}${split ? ' split' : ''}"` +
+    ` title="운영(장비) 판정">운${mj.op}</span>`);
+  if (mj.cdn) parts.push(`<span class="mj ${cls(mj.cdn)}${split ? ' split' : ''}"` +
+    ` title="cdn_6h 판정">cdn${mj.cdn}</span>`);
+  if (mj.nG != null && mj.nstruct) parts.push(
+    `<span class="mj" title="구조모델 ${mj.nstruct}개 중 G 로 본 수">${mj.nG}/${mj.nstruct}G</span>`);
+  return parts.join('');
+}
+
 const TE_TH = { bubble: 0.41, film: 0.31 }, TE_LOW = 0.15;
 function teTag(te) {
   if (!te) return { html: '', hit: false };
@@ -640,6 +666,7 @@ function renderGrid(d) {
   d.rows.forEach((row, r) => {
     const isBmd = !row.is_control && d.bmd_choice === 'c' + row.conc_index;
     const te = teTag(row.te);
+    const mj = mjTag(row.mj);
     // 웰 토큰: control 은 k<순번>, 농도는 c<농도인덱스>
     const tok = row.is_control ? 'k' + ctlSeen++ : 'c' + row.conc_index;
     const onWell = TE_WELLS.has(tok);
@@ -649,7 +676,7 @@ function renderGrid(d) {
     html += `<td class="row-conc${row.is_control ? ' cont' : ''}">` +
             `<span class="te-well${onWell ? ' on' : ''}" data-well="${tok}"` +
             ` title="이 칸을 기술오류로 표시 (사람 판정)">TE</span>` +
-            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + te.html + `${row.label}</td>`;
+            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + te.html + mj + `${row.label}</td>`;
     row.cells.forEach((src, t) => {
       html += `<td class="cell"><img loading="lazy" src="${src}" data-r="${r}" data-t="${t}"></td>`;
     });
@@ -817,6 +844,13 @@ function applyBmdToggle() {
 function toggleBmd() {
   localStorage.setItem('showBmd', localStorage.getItem('showBmd') !== '0' ? '0' : '1');
   applyBmdToggle();
+}
+function setModelMic(d) {
+  const box = $('#micBox');
+  if (!box) return;
+  const has = d && (d.op_mic || d.cdn_mic);
+  box.hidden = !has;
+  if (has) { $('#opMic').textContent = d.op_mic || '—'; $('#cdnMic').textContent = d.cdn_mic || '—'; }
 }
 function setBmd(d) {
   $('#bmdVal').textContent = (d && d.bmd_mic) ? d.bmd_mic : '—';

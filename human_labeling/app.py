@@ -107,12 +107,34 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
     "allwrong": "전 구조 실패 웰 포함",
-    "op_only": "운영만 맞힘(EN)",
+    # ★등급을 나눈다 — "구조 하나라도 실패"(218)는 절반이 1/18 실패라 너무 느슨했다.
+    "op_only_all": "★운영만 맞힘 — 구조 전멸(18/18)",
+    "op_only_hard": "운영 정답 · 구조 과반 실패(≥9/18)",
+    "op_only_harm": "운영 정답 · 구조 ≥5 임상오류",
+    "op_vs_struct": "(참고) 구조 ≥1 실패",
+    # ★운영 대체 후보 cdn_6h 가 운영에 지는 건 — EA 를 벗어난 30건. 대체 비용의 실체다.
+    "cdn6h_worse": "★cdn_6h 열위 (운영✓ cdn✗)",
+    # ★운영 대체 시 새로 생기는 VME — 24건 중 21건은 운영도 낸다. 이 3건만이 실제 증가분.
+    "vme_new": "★★새로 생기는 VME (운영✓ cdn VME)",
+    # ★★개선 표적(2026-09-09) — 동일 분모(d170 전량 재추론 13,989패널) 비교 결과
+    #   운영 대비 EA·CA·ME·PASS 는 우리가 앞서고 **VME 만 뒤진다**(138 vs 114).
+    #   종합점수가 VME 를 12배로 키우므로 이 하나가 승부를 뒤집는다 → 개선 표적.
+    "vme_target": "★★개선표적 — 우리만 내는 VME (운영✓ cdn VME)",
+    "vme_shared": "VME 공통 (운영도 냄) — 라벨·이미지 한계 의심",
+    "vme_op_only": "운영만 VME (우리가 이미 고친 것)",
+    # ★VME 는 확신도로 못 잡는다 — 최소|logit| 중앙 3.002 로 전체(3.383)와 비슷.
+    #   TE·붕괴·단조·control무효·저확신20% 어디에도 안 걸리는 6건이 핵심 미해결층.
+    "vme_all": "cdn_6h VME 전체(14)",
+    "vme_unflagged": "★★신호 미포착 VME (6) — 최우선",
+    "cdn6h_better": "(참고) cdn_6h 우위 (운영✗ cdn✓)",
     "te_suspect": "TE 기술오류 의심",
     "skip_growth": "skip growth (물리 위반)",
     # ★사람이 직접 고른 skip 기준 사례. 판단이 명백한 것만 모은다.
     #   ⚠평가셋(EN·비학습) 밖도 섞여 있다 — 라벨/육안 확인용이지 모델 채점용이 아니다.
     "skip_ref": "★skip 기준 사례",
+    # ★늦게 시작(t5~t6 에야 상승) — 정적 임계의 사각지대. 규칙이 실제G 를 31% 놓친다(전체 13.7%)
+    "late_growth": "늦게 시작(궤적)",
+    "late_growth_miss": "★늦게 시작 · 규칙 놓침",
 }
 
 
@@ -351,6 +373,17 @@ def source_version() -> str:
     return "-".join(v)
 
 
+# ★모델 판정(행별) — 소스 parquet 을 건드리지 않으려고 **별도 파일**로 붙인다.
+#   parquet 을 바꾸면 idx 가 밀려 열어 둔 탭이 깨진다(2026-09-08 사고).
+#   생성 = 예측 parquet → model_rows.json. 없으면 배지 없이 그대로 뜬다.
+MODEL_ROWS = {}
+try:
+    with open(os.path.join(HERE, "model_rows.json"), encoding="utf-8") as _f:
+        MODEL_ROWS = json.load(_f)
+except (OSError, ValueError):
+    MODEL_ROWS = {}
+
+
 SOURCE_VERSION = source_version()
 SAMPLES = load_samples()
 SAMPLES_BY_IDX = {s["idx"]: s for s in SAMPLES}
@@ -521,6 +554,20 @@ def ensure_cells(sample: dict) -> dict:
         cells = [
             f"/static/cells/{sample['key']}/r{row}_t{col}.png?v={ver}" for col in range(time_len)
         ]
+        # 모델 판정 — 농도 행에만 붙는다(control 은 모델 대상이 아니다)
+        mj = None
+        mr = MODEL_ROWS.get(
+            f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}')
+        if mr and not is_control and conc_index is not None:
+            def _g(seq):
+                if not seq or conc_index >= len(seq):
+                    return None
+                v = seq[conc_index]
+                return None if v == "" else ("G" if v == "0" else "NG")
+            mj = {"cdn": _g(mr.get("cdn")), "op": _g(mr.get("op")),
+                  "nG": (mr.get("nG") or [None])[conc_index]
+                        if mr.get("nG") and conc_index < len(mr["nG"]) else None,
+                  "nstruct": mr.get("nstruct")}
         te = None
         tr = sample.get("te_rows")
         if tr and row < len(tr) and tr[row]:
@@ -530,10 +577,13 @@ def ensure_cells(sample: dict) -> dict:
                   "drop": v[3] if len(v) > 3 else 0}
         rows.append(
             {"label": label, "is_control": is_control, "conc_index": conc_index,
-             "cells": cells, "te": te}
+             "cells": cells, "te": te, "mj": mj}
         )
 
-    return {"time_len": time_len, "rows": rows}
+    _mr = MODEL_ROWS.get(
+        f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}')
+    return {"time_len": time_len, "rows": rows,
+            "cdn_mic": (_mr or {}).get("cdn_mic"), "op_mic": (_mr or {}).get("op_mic")}
 
 
 def cached_cell_urls(sample: dict) -> list:
@@ -845,6 +895,9 @@ class Handler(BaseHTTPRequestHandler):
                     "concentrations": s["concentrations"],
                     "time_len": layout["time_len"],
                     "rows": layout["rows"],
+                    # 모델 MIC — 사람 판독과 대조용(참고 표시)
+                    "op_mic": layout.get("op_mic"),
+                    "cdn_mic": layout.get("cdn_mic"),
                     "all_growth_label": f">={hi}",
                     "bmd_mic": s["bmd_mic"],
                     "bmd_choice": s["bmd_choice"],
