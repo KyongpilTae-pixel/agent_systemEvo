@@ -172,6 +172,10 @@ CSV_PATH = os.path.join(HERE, "image_mic_labels.csv")
 CSV_FIELDS = [
     "project_id",
     "sample_id",
+    # ★같은 (project, sample, drug) 가 **두 번 시험**된 검체가 있다(접종량 차이 등, 23패널).
+    #   3중 키만으로는 어느 시험에 붙은 라벨인지 구분할 수 없다(2026-09-11).
+    #   기존 라벨(236건)은 이 칸이 비어 있고, `load_labels` 가 3중 키로도 읽어 유실이 없다.
+    "sample_dir_id",
     "organism_group",
     "microbial_id",
     "antimicrobial",
@@ -432,7 +436,9 @@ def resolve_sample(sample_id: str, antimicrobial: str, project_id: str = "") -> 
 # 라벨(CSV) 저장소
 # ----------------------------------------------------------------------------
 def label_key(sample: dict) -> tuple:
-    return (sample["project_id"], sample["sample_id"], sample["antimicrobial"])
+    """★4중 키(2026-09-11). `sample_dir_id` 가 없으면 3중과 같아져 구본과 호환된다."""
+    return (sample["project_id"], sample["sample_id"], sample["antimicrobial"],
+            str(sample.get("sample_dir_id") or ""))
 
 
 def load_labels() -> dict:
@@ -441,7 +447,9 @@ def load_labels() -> dict:
     if os.path.exists(CSV_PATH):
         with open(CSV_PATH, newline="", encoding="utf-8") as f:
             for r in csv.DictReader(f):
-                key = (r.get("project_id", ""), r.get("sample_id", ""), r.get("antimicrobial", ""))
+                sd = str(r.get("sample_dir_id", "") or "")
+                key = (r.get("project_id", ""), r.get("sample_id", ""),
+                       r.get("antimicrobial", ""), sd)
                 labels[key] = {
                     "human_mic": r.get("image_mic", r.get("human_mic", "")),
                     "choice": order_to_choice(r.get("image_mic_order", r.get("choice", ""))),
@@ -455,20 +463,40 @@ def load_labels() -> dict:
 LABELS = load_labels()
 
 
+def label_get(sample: dict):
+    """★4중 키 우선, 없으면 **구본 3중 키**(sample_dir_id="")로 폴백(2026-09-11).
+
+    기존 라벨 236건은 `sample_dir_id` 칸이 비어 있다. 폴백이 없으면 전부 사라져 보인다.
+    ⚠두 번 시험된 패널(23개)에서는 구본 라벨이 **양쪽 모두에 보인다** — 어느 시험에
+      붙었는지 원본에 없기 때문이다. 새로 저장하면 4중 키로 확정된다.
+    """
+    k = label_key(sample)
+    v = LABELS.get(k)
+    if v is None and k[3]:
+        v = LABELS.get((k[0], k[1], k[2], ""))
+    return v
+
+
 def save_labels():
     """전체 라벨을 단일 CSV로 원자적 저장 (샘플 정렬 순서 유지)."""
     tmp = CSV_PATH + ".tmp"
     with open(tmp, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
         w.writeheader()
+        seen = set()
         for s in SAMPLES:
             key = label_key(s)
-            if key in LABELS:
-                lab = LABELS[key]
+            lab = LABELS.get(key)
+            if lab is None and key[3]:              # ★구본 3중 키 폴백
+                key = (key[0], key[1], key[2], "")
+                lab = LABELS.get(key)
+            if lab is not None and key not in seen:
+                seen.add(key)
                 w.writerow(
                     {
                         "project_id": s["project_id"],
                         "sample_id": s["sample_id"],
+                        "sample_dir_id": str(s.get("sample_dir_id") or ""),
                         "organism_group": s["organism_group"],
                         "microbial_id": s["microbial_id"],
                         "antimicrobial": s["antimicrobial"],
@@ -483,11 +511,16 @@ def save_labels():
 
 
 def get_entry(sample: dict) -> dict:
-    """샘플의 라벨 항목을 반환 (없으면 기본값으로 새로 생성)."""
+    """샘플의 라벨 항목을 반환 (없으면 기본값으로 새로 생성).
+
+    ★구본 3중 키 항목이 있으면 **4중 키로 이관**한다(2026-09-11). 안 하면 편집 순간
+      빈 항목이 덮어써져 기존 라벨이 사라진다.
+    """
     key = label_key(sample)
     if key not in LABELS:
-        LABELS[key] = {"human_mic": "", "choice": "", "ambiguous": False, "TE": False,
-                       "TE_wells": []}
+        old = LABELS.pop((key[0], key[1], key[2], ""), None) if key[3] else None
+        LABELS[key] = old if old is not None else {
+            "human_mic": "", "choice": "", "ambiguous": False, "TE": False, "TE_wells": []}
     return LABELS[key]
 
 
@@ -495,7 +528,7 @@ def count_done() -> int:
     """MIC(choice)가 지정된 샘플 수. 플래그만 있는 항목은 미완료로 간주."""
     done = 0
     for s in SAMPLES:
-        lab = LABELS.get(label_key(s))
+        lab = label_get(s)
         if lab and lab.get("choice"):
             done += 1
     return done
@@ -789,7 +822,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _sample_status(self, s):
-        lab = LABELS.get(label_key(s))
+        lab = label_get(s)
         return {
             "idx": s["idx"],
             # group 은 서버 기본 순서. 사이드바는 아래 필드로 순서를 바꿔 가며 직접 조립한다.
@@ -861,7 +894,7 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, KeyError):
                 self._json({"error": "invalid idx"}, 400)
                 return
-            lab = LABELS.get(label_key(s))
+            lab = label_get(s)
             # 다음 샘플들을 백그라운드에서 미리 추출.
             # next=1,2,3 이 오면 사이드바에 실제로 보이는 다음 순서를 쓴다.
             nxt = [int(t) for t in qs.get("next", [""])[0].split(",") if t.strip().isdigit()]
@@ -885,6 +918,10 @@ class Handler(BaseHTTPRequestHandler):
                         "idx": idx,
                         "project_id": s["project_id"],
                         "sample_id": s["sample_id"],
+                        # ★pkey — 클라이언트가 저장 시 되돌려 보내 stale idx 를 막는다.
+                        #   4중(sample_dir_id 포함) — 두 번 시험된 검체를 구분한다.
+                        "pkey": (f'{s["project_id"]}|{s["sample_id"]}|{s["antimicrobial"]}'
+                                 f'|{s.get("sample_dir_id") or ""}'),
                         "microbial_id": s["microbial_id"],
                         "antimicrobial": s["antimicrobial"],
                         "bmd_mic": s["bmd_mic"],
@@ -903,6 +940,9 @@ class Handler(BaseHTTPRequestHandler):
                     "idx": idx,
                     "project_id": s["project_id"],
                     "sample_id": s["sample_id"],
+                    # ★pkey — 저장 시 되돌려 보내 stale idx 를 막는다(4중: 두 번 시험 구분)
+                    "pkey": (f'{s["project_id"]}|{s["sample_id"]}|{s["antimicrobial"]}'
+                             f'|{s.get("sample_dir_id") or ""}'),
                     "microbial_id": s["microbial_id"],
                     "antimicrobial": s["antimicrobial"],
                     "concentrations": s["concentrations"],
@@ -977,8 +1017,13 @@ class Handler(BaseHTTPRequestHandler):
         # ★idx 는 소스 순번이라 소스를 다시 만들면 통째로 밀린다.
         #   열어 둔 탭이 옛 idx 로 저장하면 **다른 패널에 라벨이 붙는다**(2026-09-08 실제 발생).
         #   그래서 클라이언트가 보낸 패널 신원(pkey)·소스 버전을 대조하고, 어긋나면 거부한다.
+        # ★pkey 도 4중(2026-09-11) — 두 번 시험된 검체(23패널)는 3중으로 구분되지 않아
+        #   가드가 뚫린다. 구본 클라이언트(3중 pkey)는 앞 3칸만 비교해 호환한다.
         pkey = data.get("pkey")
-        want = f'{s["project_id"]}|{s["sample_id"]}|{s["antimicrobial"]}'
+        want = (f'{s["project_id"]}|{s["sample_id"]}|{s["antimicrobial"]}'
+                f'|{s.get("sample_dir_id") or ""}')
+        if pkey and pkey.count("|") == 2:                 # 구본 3중 pkey
+            want = "|".join(want.split("|")[:3])
         if pkey and pkey != want:
             self._json({"error": "stale",
                         "message": "소스가 바뀌어 순번이 밀렸습니다. 새로고침 후 다시 라벨하세요.",
@@ -1075,7 +1120,7 @@ def main():
         done = sum(
             1
             for s in SAMPLES
-            if s["src_id"] == src["id"] and (LABELS.get(label_key(s)) or {}).get("choice")
+            if s["src_id"] == src["id"] and (label_get(s) or {}).get("choice")
         )
         print(f"[human-labeling] {src['label']}: {done}/{n}")
     print(f"[human-labeling] samples: {len(SAMPLES)}  labeled: {count_done()}")

@@ -573,7 +573,7 @@ async function submitFlags() {
   $('#flagTE').closest('.flag').classList.toggle('on', te);
   const res = await fetchJSON('/api/flags', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idx: curIdx, ambiguous: amb, TE: te })
+    body: JSON.stringify({ idx: curIdx, pkey: curData?.pkey, ambiguous: amb, TE: te })
   });
   if (res.ok) {
     if (curData) { curData.ambiguous = res.ambiguous; curData.TE = res.TE; }
@@ -716,7 +716,7 @@ function renderGrid(d) {
       const res = await fetchJSON('/api/flags', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idx: curIdx, te_well: w, on }),
+        body: JSON.stringify({ idx: curIdx, pkey: curData?.pkey, te_well: w, on }),
       });
       if (res && res.TE_wells) TE_WELLS = new Set(res.TE_wells);
       updateTeWellCount();
@@ -768,7 +768,7 @@ async function submitLabel(choice) {
   el.textContent = '저장 중…'; el.classList.remove('saved');
   const res = await fetchJSON('/api/label', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idx: curIdx, choice })
+    body: JSON.stringify({ idx: curIdx, pkey: curData?.pkey, choice })
   });
   if (res.ok) {
     curData.choice = choice; curData.human_mic = res.human_mic;
