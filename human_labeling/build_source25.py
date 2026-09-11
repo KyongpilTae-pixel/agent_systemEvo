@@ -102,12 +102,19 @@ def main():
     want = pd.concat([v.astype(str) for v in subs.values()], ignore_index=True).drop_duplicates()
     want['pk'] = want.project_id + '|' + want.sample_id + '|' + want.antimicrobial
     keep = set(want.pk)
-    d['pk'] = d.project_id.astype(str) + '|' + d.sample_id.astype(str) + '|' + d.antimicrobial.astype(str)
+    # ★`sample_dir_id` 를 키에 넣는다(2026-09-11 수정). 같은 (project, sample, drug) 가
+    #   **두 번 시험**된 검체가 있다(접종량 차이 등). 빼면 두 시험의 웰이 **한 격자에 쌓여**
+    #   라벨러가 보는 이미지가 틀린다 — 실측 22패널(0.4%)이 그 상태였고, 그중에는
+    #   두 시험의 모델 판정이 **정반대**(G vs NG)인 것도 있다.
+    #   ⚠서브셋 CSV 는 3중 키라 그대로 두고(매칭은 pk3), 격자 조립만 4중 키로 나눈다.
+    d['pk3'] = d.project_id.astype(str) + '|' + d.sample_id.astype(str) + '|' + d.antimicrobial.astype(str)
+    d['pk'] = d.pk3 + '|' + d.sample_dir_id.astype(str)
     print(f'[src25] 대상 패널 {len(keep):,}', flush=True)
 
     # ── control 은 검체 단위 ──
     ctl = d[d.antimicrobial == 'Cont'].copy()
-    ctl['sk'] = ctl.project_id.astype(str) + '|' + ctl.sample_id.astype(str)
+    ctl['sk'] = (ctl.project_id.astype(str) + '|' + ctl.sample_id.astype(str)
+                 + '|' + ctl.sample_dir_id.astype(str))      # ★시험 단위로 control 을 고른다
     ctl = ctl.sort_values('c')
     ctl_by = {k: g for k, g in ctl.groupby('sk')}
 
@@ -131,12 +138,12 @@ def main():
 
     rows = []
     miss_img = 0
-    for pk, g in d[d.pk.isin(keep)].groupby('pk'):
+    for pk, g in d[d.pk3.isin(keep)].groupby('pk'):      # ★매칭=pk3(3중) · 조립=pk(4중)
         g = g[g.c.notna()].sort_values('c')
         if not len(g):
             continue
         r0 = g.iloc[0]
-        sk = f'{r0.project_id}|{r0.sample_id}'
+        sk = f'{r0.project_id}|{r0.sample_id}|{r0.sample_dir_id}'   # ★시험 단위
         cg = ctl_by.get(sk)
         concs = [f'{x:g}' for x in g.c.tolist()]
         grid, te_rows = [], []

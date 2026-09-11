@@ -324,9 +324,15 @@ def load_samples() -> list[dict]:
             antimicrobial = str(row["antimicrobial"])
             hide_bmd = antimicrobial in BMD_HIDDEN_DRUGS
             # 이미지 캐시 키: 기존 캐시를 그대로 재사용하되, 소스 간 충돌 시에만 접두사 추가
+            # ★같은 (sample_id, drug) 가 **두 번 시험**된 검체가 있다(2026-09-11).
+            #   캐시 키가 같으면 두 패널이 **같은 PNG 를 재사용**해 이미지가 섞인다.
+            #   sample_dir_id 로 구분하고, 그래도 충돌하면 소스 접두사를 붙인다.
+            _sdir = str(row.get("sample_dir_id") or "")
             key = _safe_key(sample_id, antimicrobial)
+            if key in used_keys and _sdir:
+                key = _safe_key(f"{sample_id}__{_sdir}", antimicrobial)
             if key in used_keys:
-                key = _safe_key(f"{src['id']}__{sample_id}", antimicrobial)
+                key = _safe_key(f"{src['id']}__{sample_id}__{len(samples)}", antimicrobial)
             used_keys.add(key)
             samples.append(
                 {
@@ -335,6 +341,7 @@ def load_samples() -> list[dict]:
                     "src_label": src["label"],
                     "project_id": str(row["project_id"]),
                     "sample_id": sample_id,
+                    "sample_dir_id": _sdir,        # ★model_rows 4중 키 조회용
                     "organism_group": str(row["organism_group"]),
                     "microbial_id": str(row["microbial_id"]),
                     "antimicrobial": antimicrobial,
@@ -559,8 +566,11 @@ def ensure_cells(sample: dict) -> dict:
         ]
         # 모델 판정 — 농도 행에만 붙는다(control 은 모델 대상이 아니다)
         mj = None
-        mr = MODEL_ROWS.get(
-            f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}')
+        # ★4중 키 우선(2026-09-11) — 같은 (project,sample,drug)가 두 번 시험된 검체가 있어
+        #   3중 키면 한쪽 판정이 다른 쪽에 잘못 붙는다. 구본 파일 호환으로 3중 키 폴백.
+        _k3 = f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}'
+        mr = (MODEL_ROWS.get(f'{_k3}|{sample.get("sample_dir_id", "")}')
+              or MODEL_ROWS.get(_k3))
         if mr and not is_control and conc_index is not None:
             def _g(seq):
                 if not seq or conc_index >= len(seq):
