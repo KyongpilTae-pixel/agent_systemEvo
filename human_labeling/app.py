@@ -115,7 +115,11 @@ SUBSET_LABELS = {
     #   분모 5,357 → 15,216패널 · 표적 3건 → 44건.
     #   (운영 drast_mic VME 109 · 우리 cdn_6h 135 · 공유 91 · 우리만 44 · 운영만 18)
     "vme_unflagged": "VME ★★신호 미포착 — 최우선",
-    "vme_new": "VME ★우리만 낸다 (운영✓ cdn✗) — 개선 표적",
+    # ★2026 신규 패널(Enterobacteriaceae 18약제)에 드는 것만 — 앞으로의 실제 표적.
+    #   정본 = release_25/dRASTBreakpoints_2026 new panel.csv (사용자 제공 2026-09-14).
+    #   CIP·CZ·IP·TS 가 빠져 21건 → 10건이 된다. CIP 7건이 통째로 빠지는 게 크다.
+    "vme_new_panel2026": "VME ★★★개선 표적 · 2026 신규패널 한정",
+    "vme_new": "VME ★우리만 낸다 (운영✓ cdn✗) — 전체",
     "vme_shared": "VME 운영도 낸다 — 라벨·이미지 한계 의심",
     "vme_op_only": "VME 운영만 낸다 — 우리가 이미 고친 것",
     "vme_all": "VME cdn_6h 전체",
@@ -138,11 +142,6 @@ SUBSET_LABELS = {
     "te_suspect": "기술오류 TE 의심 (기포·필름)",
     "frame_disorder": "기술오류 프레임 순서 이상",
 
-    # ────────── 옛 기준 (재현 경로 없음 — 참고만) ──────────
-    #   2026 신규 패널(136 drug×bug) 정의 파일이 저장소에 없어 재산출하지 못했다.
-    #   `vme_new` 가 같은 목적의 최신판이다.
-    "vme_target": "(옛 기준) 개선표적 — vme_new 로 대체됨",
-    "vme_target_panel2026": "(옛 기준) 개선표적 · 2026 신규패널 한정",
 }
 
 
