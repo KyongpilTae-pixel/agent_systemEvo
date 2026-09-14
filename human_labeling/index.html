@@ -55,6 +55,9 @@
     #subsetFilter { flex:1 1 auto; min-width:0; font-size:12px; padding:4px 6px;
       border:1px solid #d7dce5; border-radius:6px; background:#fff; color:#1a2330; }
     #subsetFilter.on { border-color:#2f6fd0; background:#eef4ff; font-weight:600; }
+    #bmdOnlyWrap { display:flex; align-items:center; gap:3px; font-size:12px; color:#456;
+      white-space:nowrap; cursor:pointer; user-select:none; }
+    #bmdOnlyWrap.on { color:#2f6fd0; font-weight:600; }
     #grouping { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
   #grouping .lb { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
   #grouping .segs { display: flex; flex: 1; gap: 4px; }
@@ -266,6 +269,9 @@
       <div id="subsetWrap" title="검토 목록만 골라 보기 (단축키 f)">
         <span class="lb">보기</span>
         <select id="subsetFilter"><option value="">전체</option></select>
+        <label id="bmdOnlyWrap" title="bmd(참조 MIC)가 있는 패널만 — 없으면 bmd·운영·구조모델 칸이 모두 빈다">
+          <input type="checkbox" id="bmdOnly"><span>bmd만</span>
+        </label>
       </div>
       <div id="grouping" title="사이드바 그룹핑 순서 (단축키 g)">
         <span class="lb">그룹</span>
@@ -322,6 +328,10 @@ const $ = (s, r=document) => r.querySelector(s);
 let SAMPLES = [];
 // ★서브셋 필터 — 검토 목록(운영만 맞힘 등)만 골라 본다. 브라우저에 기억된다.
 let subsetFilter = localStorage.getItem('subsetFilter') || '';
+// ★bmd 있는 것만 보기(2026-09-14). 소스 6,020 중 2,483(41%)이 bmd 결측이고 프로젝트
+//   단위로 갈린다(202408_KNUH 0% · SNUH_2019 99.5%). bmd 가 없으면 화면의
+//   `bmd · 운영 · 구조모델` 세 칸이 다 비어 교차검증이 안 되므로 걸러 볼 수 있게 한다.
+let bmdOnly = localStorage.getItem('bmdOnly') === '1';
 let lastSubset = localStorage.getItem('lastSubset') || '';
 
 async function loadSubsets() {
@@ -338,6 +348,18 @@ async function loadSubsets() {
   sel.value = subsetFilter;
   sel.classList.toggle('on', !!subsetFilter);
   sel.addEventListener('change', () => setSubset(sel.value));
+
+  const cb = $('#bmdOnly');
+  if (cb) {
+    cb.checked = bmdOnly;
+    $('#bmdOnlyWrap').classList.toggle('on', bmdOnly);
+    cb.addEventListener('change', () => {
+      bmdOnly = cb.checked;
+      localStorage.setItem('bmdOnly', bmdOnly ? '1' : '0');
+      $('#bmdOnlyWrap').classList.toggle('on', bmdOnly);
+      renderList();
+    });
+  }
 }
 
 function setSubset(v) {
@@ -488,6 +510,7 @@ function renderList() {
   const q = $('#search').value.trim().toLowerCase();
   let shown = SAMPLES;
   if (subsetFilter) shown = shown.filter(s => (s.subsets || []).includes(subsetFilter));
+  if (bmdOnly) shown = shown.filter(s => s.has_bmd);
   if (q) shown = shown.filter(s => s.sample_id.toLowerCase().includes(q));
   const list = $('#list');
   list.innerHTML = '';

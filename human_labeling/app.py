@@ -852,6 +852,12 @@ class Handler(BaseHTTPRequestHandler):
             "TE_wells": (lab.get("TE_wells") if lab else []) or [],
             # 이 샘플이 속한 서브셋들. 사이드바 "이것만 보기" 필터가 쓴다.
             "subsets": s["subsets"],
+            # ★bmd 유무(2026-09-14) — 사이드바 "bmd 있는 것만" 체크박스가 쓴다.
+            #   소스 6,020 중 2,483(41%)이 bmd 결측이고 **프로젝트 단위로 갈린다**
+            #   (202408_KNUH·HEGP_2022 0% · KUMC_2025 6% vs SNUH_2019 99.5%).
+            #   bmd 가 없으면 화면의 `bmd · 운영 · 구조모델` 세 칸이 다 비어 교차검증이 안 된다.
+            #   ⚠소스에서 빼지는 않는다 — 정답이 없는 검체라 사람 라벨의 가치는 오히려 크다.
+            "has_bmd": bool(str(s.get("bmd_mic") or "").strip()),
         }
 
     # ---- GET ----

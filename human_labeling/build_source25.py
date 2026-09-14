@@ -161,6 +161,7 @@ def main():
             te_rows.append(_te(str(r0.antimicrobial), wr.c))
         if any(not any(f) for f in grid):
             miss_img += 1
+        # ※bmd 결측 패널도 그대로 둔다(2026-09-14 사용자 확정) — 화면에서 거르는 옵션으로 대신한다.
         rows.append(dict(
             project_id=str(r0.project_id), sample_id=str(r0.sample_id),
             antimicrobial=str(r0.antimicrobial),
