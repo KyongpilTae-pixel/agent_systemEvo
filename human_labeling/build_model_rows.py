@@ -56,13 +56,19 @@ def main():
     want = set(src.pk)
     print(f'[rows] 소스 패널 {len(want):,}', flush=True)
 
-    fs = sorted(glob.glob(f'{OUT}/pred_full_g*.parquet'))
+    # ★기본을 **정본 추론 산출물**로 둔다(2026-09-14). 옛 `pred_full_g*` 는 정본 전환
+    #   이전(원본 CSV · 958검체) 결과라 라벨링 화면의 모델 배지가 **지금 모델과 다른 판정**을
+    #   보여준다. 환경변수 `ROWS_PRED` 로 glob 패턴을 바꿀 수 있다(쉼표 구분).
+    _pat = os.environ.get('ROWS_PRED',
+                          f'{OUT}/pred_canon_*.parquet,{OUT}/pred_d170_baseline_canon.parquet')
+    fs = []
+    for g in _pat.split(','):
+        fs += sorted(glob.glob(g.strip()))
+    fs = [f for f in fs if os.path.exists(f)]
     if not fs:
-        raise SystemExit('[rows] pred_full_g*.parquet 없음')
+        raise SystemExit(f'[rows] 추론 parquet 없음 — 패턴 {_pat}')
+    print(f'[rows] 입력 {len(fs)}파일: ' + ', '.join(os.path.basename(f) for f in fs), flush=True)
     D = pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True)
-    b = f'{OUT}/pred_d170_baseline_full.parquet'
-    if os.path.exists(b):
-        D = pd.concat([D, pd.read_parquet(b)], ignore_index=True)
     D['pk'] = (D.project_id.astype(str) + '|' + D.sample_id.astype(str) + '|'
                + D.antimicrobial.astype(str) + '|' + D.sample_dir_id.astype(str))
     D = D[D.pk.isin(want)]
