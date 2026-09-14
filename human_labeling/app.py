@@ -145,6 +145,25 @@ SUBSET_LABELS = {
 }
 
 
+# ★우리 구조모델(cdn_6h)은 **Enterobacteriaceae 전용 학습**이라(train_deploy_en)
+#   그람양성·비장내세균 패널에는 판정이 없다. 빈칸이 버그로 보이지 않게 사유를 내려준다.
+EN_GENERA = (
+    "Escherichia", "Klebsiella", "Enterobacter", "Citrobacter", "Serratia",
+    "Proteus", "Providencia", "Morganella", "Salmonella", "Shigella",
+    "Raoultella", "Hafnia", "Kluyvera", "Pantoea", "Cronobacter", "Yersinia",
+)
+
+
+def cdn_scope_note(microbial_id: str, genus: str = "") -> str:
+    """구조모델 판정이 없을 때 그 사유. 빈 문자열이면 '이유 모름'."""
+    t = f"{genus} {microbial_id}".strip()
+    if not t:
+        return ""
+    if any(g.lower() in t.lower() for g in EN_GENERA) or "coli" in t.lower():
+        return "미추론"                      # EN 인데 없다 = 평가축에서 빠진 패널
+    return "EN 전용 모델 — 대상 아님"
+
+
 # ★사진 기본 표시 프레임 수 — t0~t6(6시간). 2.5 는 원래 7장이고,
 #   3.0 은 10시간까지 있어 기본이 길어진다. 판정 기준이 6시간이므로 여기 맞춘다.
 DEFAULT_TIME_LEN = 7
@@ -667,9 +686,13 @@ def ensure_cells(sample: dict) -> dict:
     # ★기본 표시는 t0~t6(7프레임)까지만 — 판정이 6시간 기준이라 그 이후는 참고다.
     #   전체(3.0 은 10시간까지)는 UI 의 "10h" 옵션으로 켠다. 자르는 것은 프론트가 하고,
     #   여기서는 전체를 주되 기본 길이를 함께 알려 준다(2026-09-14 사용자 지시).
+    cdn_mic = (_mr or {}).get("cdn_mic")
     return {"time_len": time_len, "time_len_default": min(time_len, DEFAULT_TIME_LEN),
             "rows": rows,
-            "cdn_mic": (_mr or {}).get("cdn_mic"), "op_mic": (_mr or {}).get("op_mic")}
+            "cdn_mic": cdn_mic, "op_mic": (_mr or {}).get("op_mic"),
+            # ★구조모델 값이 없을 때만 사유를 붙인다
+            "cdn_note": "" if cdn_mic else cdn_scope_note(
+                str(sample.get("microbial_id", "")), str(sample.get("genus", "")))}
 
 
 def cached_cell_urls(sample: dict) -> list:
@@ -1002,6 +1025,8 @@ class Handler(BaseHTTPRequestHandler):
                     # 모델 MIC — 사람 판독과 대조용(참고 표시)
                     "op_mic": layout.get("op_mic"),
                     "cdn_mic": layout.get("cdn_mic"),
+                    # ★구조모델 값이 없는 사유(EN 전용 / 미추론)
+                    "cdn_note": layout.get("cdn_note"),
                     "all_growth_label": f">={hi}",
                     "bmd_mic": s["bmd_mic"],
                     "bmd_choice": s["bmd_choice"],

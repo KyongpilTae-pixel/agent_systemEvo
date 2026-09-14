@@ -902,7 +902,14 @@ function setModelMic(d) {
   if (!box) return;
   const has = d && (d.op_mic || d.cdn_mic);
   box.hidden = !has;
-  if (has) { $('#opMic').textContent = d.op_mic || '—'; $('#cdnMic').textContent = d.cdn_mic || '—'; }
+  if (has) {
+    $('#opMic').textContent = d.op_mic || '—';
+    // ★구조모델 값이 없으면 사유를 대신 보여준다(빈칸이 버그로 보이지 않게)
+    $('#cdnMic').textContent = d.cdn_mic || (d.cdn_note ? d.cdn_note : '—');
+    $('#cdnMic').title = d.cdn_mic ? '' : (d.cdn_note || '');
+    $('#cdnMic').style.fontSize = d.cdn_mic ? '' : '11px';
+    $('#cdnMic').style.opacity = d.cdn_mic ? '' : '0.7';
+  }
 }
 function setBmd(d) {
   $('#bmdVal').textContent = (d && d.bmd_mic) ? d.bmd_mic : '—';
