@@ -621,6 +621,11 @@ def ensure_cells(sample: dict) -> dict:
     # (URL 이 고정이면 브라우저가 max-age 동안 예전 PNG 를 계속 쓴다)
     ver = int(os.path.getmtime(done_flag))
 
+    # ★패널 키는 루프 밖에서도 쓴다(아래 MIC 요약) — 루프 안에서만 만들면 rows 가 빌 때 터진다.
+    _k3 = f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}'
+    _mr4 = (MODEL_ROWS.get(f'{_k3}|{sample.get("sample_dir_id", "")}')
+            or MODEL_ROWS.get(_k3))
+
     rows = []
     for row in range(n_rows):
         is_control = row < control_len
@@ -633,9 +638,7 @@ def ensure_cells(sample: dict) -> dict:
         mj = None
         # ★4중 키 우선(2026-09-11) — 같은 (project,sample,drug)가 두 번 시험된 검체가 있어
         #   3중 키면 한쪽 판정이 다른 쪽에 잘못 붙는다. 구본 파일 호환으로 3중 키 폴백.
-        _k3 = f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}'
-        mr = (MODEL_ROWS.get(f'{_k3}|{sample.get("sample_dir_id", "")}')
-              or MODEL_ROWS.get(_k3))
+        mr = _mr4
         if mr and not is_control and conc_index is not None:
             def _g(seq):
                 if not seq or conc_index >= len(seq):
@@ -658,8 +661,9 @@ def ensure_cells(sample: dict) -> dict:
              "cells": cells, "te": te, "mj": mj}
         )
 
-    _mr = MODEL_ROWS.get(
-        f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}')
+    # ★행별 mj 와 같은 4중 키 우선 규칙을 쓴다(2026-09-14) — 여기만 3중 키라
+    #   model_rows 가 4중 키로 저장된 뒤 상단 MIC 요약이 통째로 비어 있었다.
+    _mr = _mr4
     # ★기본 표시는 t0~t6(7프레임)까지만 — 판정이 6시간 기준이라 그 이후는 참고다.
     #   전체(3.0 은 10시간까지)는 UI 의 "10h" 옵션으로 켠다. 자르는 것은 프론트가 하고,
     #   여기서는 전체를 주되 기본 길이를 함께 알려 준다(2026-09-14 사용자 지시).
