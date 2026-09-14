@@ -146,6 +146,10 @@ SUBSET_LABELS = {
 }
 
 
+# ★사진 기본 표시 프레임 수 — t0~t6(6시간). 2.5 는 원래 7장이고,
+#   3.0 은 10시간까지 있어 기본이 길어진다. 판정 기준이 6시간이므로 여기 맞춘다.
+DEFAULT_TIME_LEN = 7
+
 # ★드롭다운 그룹 순서 — 임상 위험도가 큰 것부터.
 SUBSET_GROUPS = ["VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
 
@@ -657,7 +661,11 @@ def ensure_cells(sample: dict) -> dict:
 
     _mr = MODEL_ROWS.get(
         f'{sample["project_id"]}|{sample["sample_id"]}|{sample["antimicrobial"]}')
-    return {"time_len": time_len, "rows": rows,
+    # ★기본 표시는 t0~t6(7프레임)까지만 — 판정이 6시간 기준이라 그 이후는 참고다.
+    #   전체(3.0 은 10시간까지)는 UI 의 "10h" 옵션으로 켠다. 자르는 것은 프론트가 하고,
+    #   여기서는 전체를 주되 기본 길이를 함께 알려 준다(2026-09-14 사용자 지시).
+    return {"time_len": time_len, "time_len_default": min(time_len, DEFAULT_TIME_LEN),
+            "rows": rows,
             "cdn_mic": (_mr or {}).get("cdn_mic"), "op_mic": (_mr or {}).get("op_mic")}
 
 
@@ -985,6 +993,8 @@ class Handler(BaseHTTPRequestHandler):
                     "antimicrobial": s["antimicrobial"],
                     "concentrations": s["concentrations"],
                     "time_len": layout["time_len"],
+                    # ★기본 표시 범위(t0~t6). 프론트가 이걸로 자른다.
+                    "time_len_default": layout.get("time_len_default"),
                     "rows": layout["rows"],
                     # 모델 MIC — 사람 판독과 대조용(참고 표시)
                     "op_mic": layout.get("op_mic"),

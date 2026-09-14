@@ -55,9 +55,11 @@
     #subsetFilter { flex:1 1 auto; min-width:0; font-size:12px; padding:4px 6px;
       border:1px solid #d7dce5; border-radius:6px; background:#fff; color:#1a2330; }
     #subsetFilter.on { border-color:#2f6fd0; background:#eef4ff; font-weight:600; }
-    #bmdOnlyWrap { display:flex; align-items:center; gap:3px; font-size:12px; color:#456;
+    #bmdOnlyWrap, #showFullWrap { display:flex; align-items:center; gap:3px; font-size:12px; color:#456;
       white-space:nowrap; cursor:pointer; user-select:none; }
-    #bmdOnlyWrap.on { color:#2f6fd0; font-weight:600; }
+    #bmdOnlyWrap.on, #showFullWrap.on { color:#2f6fd0; font-weight:600; }
+    #showFullWrap { display:none; }            /* 6시간짜리 소스에서는 감춘다 */
+    #showFullWrap.avail { display:flex; }
     #grouping { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
   #grouping .lb { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
   #grouping .segs { display: flex; flex: 1; gap: 4px; }
@@ -272,6 +274,9 @@
         <label id="bmdOnlyWrap" title="bmd(참조 MIC)가 있는 패널만 — 없으면 bmd·운영·구조모델 칸이 모두 빈다">
           <input type="checkbox" id="bmdOnly"><span>bmd만</span>
         </label>
+        <label id="showFullWrap" title="기본은 6시간(t0~t6)까지만 본다. 체크하면 끝까지(3.0 은 10시간) 보여준다">
+          <input type="checkbox" id="showFull"><span>10h</span>
+        </label>
       </div>
       <div id="grouping" title="사이드바 그룹핑 순서 (단축키 g)">
         <span class="lb">그룹</span>
@@ -332,6 +337,13 @@ let subsetFilter = localStorage.getItem('subsetFilter') || '';
 //   단위로 갈린다(202408_KNUH 0% · SNUH_2019 99.5%). bmd 가 없으면 화면의
 //   `bmd · 운영 · 구조모델` 세 칸이 다 비어 교차검증이 안 되므로 걸러 볼 수 있게 한다.
 let bmdOnly = localStorage.getItem('bmdOnly') === '1';
+// ★사진 표시 범위 — 기본 6시간(t0~t6). 판정 기준이 6시간이라 그 이후는 참고다.
+let showFull = localStorage.getItem('showFull') === '1';
+function curVisibleT() {
+  if (!curData) return 0;
+  return showFull ? curData.time_len
+                  : Math.min(curData.time_len, curData.time_len_default || curData.time_len);
+}
 let lastSubset = localStorage.getItem('lastSubset') || '';
 
 async function loadSubsets() {
@@ -358,6 +370,18 @@ async function loadSubsets() {
       localStorage.setItem('bmdOnly', bmdOnly ? '1' : '0');
       $('#bmdOnlyWrap').classList.toggle('on', bmdOnly);
       renderList();
+    });
+  }
+
+  const fb = $('#showFull');
+  if (fb) {
+    fb.checked = showFull;
+    $('#showFullWrap').classList.toggle('on', showFull);
+    fb.addEventListener('change', () => {
+      showFull = fb.checked;
+      localStorage.setItem('showFull', showFull ? '1' : '0');
+      $('#showFullWrap').classList.toggle('on', showFull);
+      if (curData) renderGrid(curData);       // 다시 그리기만 하면 된다(재요청 불필요)
     });
   }
 }
@@ -680,7 +704,12 @@ function renderGrid(d) {
   const canvas = $('#canvas');
   TE_WELLS = new Set(d.TE_wells || []);
   let ctlSeen = 0;
-  const T = d.time_len;
+  // ★기본은 6시간(t0~t6)까지만. 'showFull' 이면 전체를 보여준다.
+  const TFULL = d.time_len;
+  const T = showFull ? TFULL : Math.min(TFULL, d.time_len_default || TFULL);
+  // ★"10h" 토글은 더 볼 프레임이 실제로 있을 때만 띄운다(2.5 는 7장이라 늘 숨는다).
+  const fw = $('#showFullWrap');
+  if (fw) fw.classList.toggle('avail', TFULL > (d.time_len_default || TFULL));
   let html = '<table class="grid"><thead><tr>';
   html += '<th></th>';                                   // conc label col
   for (let t = 0; t < T; t++) html += `<th class="col-time">Time ${t}</th>`;
@@ -700,7 +729,7 @@ function renderGrid(d) {
             `<span class="te-well${onWell ? ' on' : ''}" data-well="${tok}"` +
             ` title="이 칸을 기술오류로 표시 (사람 판정)">TE</span>` +
             (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + te.html + mj + `${row.label}</td>`;
-    row.cells.forEach((src, t) => {
+    row.cells.slice(0, T).forEach((src, t) => {
       html += `<td class="cell"><img loading="lazy" src="${src}" data-r="${r}" data-t="${t}"></td>`;
     });
     if (row.is_control) {
