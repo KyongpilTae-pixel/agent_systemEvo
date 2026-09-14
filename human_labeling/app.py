@@ -106,39 +106,56 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
-    "allwrong": "전 구조 실패 웰 포함",
-    # ★등급을 나눈다 — "구조 하나라도 실패"(218)는 절반이 1/18 실패라 너무 느슨했다.
-    "op_only_all": "★운영만 맞힘 — 구조 전멸(18/18)",
-    "op_only_hard": "운영 정답 · 구조 과반 실패(≥9/18)",
-    "op_only_harm": "운영 정답 · 구조 ≥5 임상오류",
-    "op_vs_struct": "(참고) 구조 ≥1 실패",
-    # ★운영 대체 후보 cdn_6h 가 운영에 지는 건 — EA 를 벗어난 30건. 대체 비용의 실체다.
-    "cdn6h_worse": "★cdn_6h 열위 (운영✓ cdn✗)",
-    # ★운영 대체 시 새로 생기는 VME — 24건 중 21건은 운영도 낸다. 이 3건만이 실제 증가분.
-    "vme_new": "★★새로 생기는 VME (운영✓ cdn VME)",
-    # ★★개선 표적(2026-09-09) — 동일 분모(d170 전량 재추론 13,989패널) 비교 결과
-    #   운영 대비 EA·CA·ME·PASS 는 우리가 앞서고 **VME 만 뒤진다**(138 vs 114).
-    #   종합점수가 VME 를 12배로 키우므로 이 하나가 승부를 뒤집는다 → 개선 표적.
-    "vme_target": "★★개선표적 — 우리만 내는 VME (운영✓ cdn VME)",
-    # ★2026 신규 패널(136 drug×bug) 안에 드는 것만 — 앞으로의 실제 표적(2026-09-11).
-    #   TS·CIP·CZ·PIP·CL 7건은 신규 패널에서 빠지는 약제라 제외했다.
-    "vme_target_panel2026": "★★★개선표적 · 2026 신규패널 한정 (16)",
-    "vme_shared": "VME 공통 (운영도 냄) — 라벨·이미지 한계 의심",
-    "vme_op_only": "운영만 VME (우리가 이미 고친 것)",
-    # ★VME 는 확신도로 못 잡는다 — 최소|logit| 중앙 3.002 로 전체(3.383)와 비슷.
-    #   TE·붕괴·단조·control무효·저확신20% 어디에도 안 걸리는 6건이 핵심 미해결층.
-    "vme_all": "cdn_6h VME 전체(14)",
-    "vme_unflagged": "★★신호 미포착 VME (6) — 최우선",
-    "cdn6h_better": "(참고) cdn_6h 우위 (운영✗ cdn✓)",
-    "te_suspect": "TE 기술오류 의심",
-    "skip_growth": "skip growth (물리 위반)",
-    # ★사람이 직접 고른 skip 기준 사례. 판단이 명백한 것만 모은다.
-    #   ⚠평가셋(EN·비학습) 밖도 섞여 있다 — 라벨/육안 확인용이지 모델 채점용이 아니다.
-    "skip_ref": "★skip 기준 사례",
-    # ★늦게 시작(t5~t6 에야 상승) — 정적 임계의 사각지대. 규칙이 실제G 를 31% 놓친다(전체 13.7%)
-    "late_growth": "늦게 시작(궤적)",
-    "late_growth_miss": "★늦게 시작 · 규칙 놓침",
+    # ────────── VME (임상 안전성 — 내성균을 놓치는 오류) ──────────
+    #   2026-09-14 전면 재산출(newmodel/build_vme_subsets25.py). 셋을 고쳤다.
+    #     ① 옛 목록은 dataset_170 **정정(9/11) 이전** 예측 산출이었다.
+    #     ② 운영축을 `lrcn_gng`(커버리지 95.6%·옛 ref 탓 5,451패널로 묶임) →
+    #        **`drast_mic`**(순차 판정의 끝·커버리지 100%)으로 교체.
+    #     ③ 학습 sample 제외 **철회** — 운영축은 우리 학습셋을 모른다. 분모가 같아야 한다.
+    #   분모 5,357 → 15,216패널 · 표적 3건 → 44건.
+    #   (운영 drast_mic VME 109 · 우리 cdn_6h 135 · 공유 91 · 우리만 44 · 운영만 18)
+    "vme_unflagged": "VME ★★신호 미포착 — 최우선",
+    "vme_new": "VME ★우리만 낸다 (운영✓ cdn✗) — 개선 표적",
+    "vme_shared": "VME 운영도 낸다 — 라벨·이미지 한계 의심",
+    "vme_op_only": "VME 운영만 낸다 — 우리가 이미 고친 것",
+    "vme_all": "VME cdn_6h 전체",
+
+    # ────────── 운영 vs 구조 모델 비교 ──────────
+    "op_only_all": "운영비교 ★운영만 맞힘 — 구조 전멸(18/18)",
+    "op_only_harm": "운영비교 운영✓ · 구조 ≥5 임상오류",
+    "op_only_hard": "운영비교 운영✓ · 구조 과반 실패(≥9/18)",
+    "op_only": "운영비교 운영✓ · 구조 일부 실패",
+    "op_vs_struct": "운영비교 (참고) 구조 ≥1 실패",
+    "cdn6h_worse": "운영비교 ★cdn_6h 열위 (운영✓ cdn✗)",
+    "cdn6h_better": "운영비교 (참고) cdn_6h 우위 (운영✗ cdn✓)",
+    "allwrong": "운영비교 전 구조 실패 웰 포함",
+
+    # ────────── 궤적·기술오류 ──────────
+    "skip_growth": "궤적 skip growth (농도 비단조 — 물리 위반)",
+    "skip_ref": "궤적 ★skip 기준 사례 (사람이 고름)",
+    "late_growth_miss": "궤적 ★늦게 시작 · 규칙 놓침",
+    "late_growth": "궤적 늦게 시작(t5~t6 상승)",
+    "te_suspect": "기술오류 TE 의심 (기포·필름)",
+    "frame_disorder": "기술오류 프레임 순서 이상",
+
+    # ────────── 옛 기준 (재현 경로 없음 — 참고만) ──────────
+    #   2026 신규 패널(136 drug×bug) 정의 파일이 저장소에 없어 재산출하지 못했다.
+    #   `vme_new` 가 같은 목적의 최신판이다.
+    "vme_target": "(옛 기준) 개선표적 — vme_new 로 대체됨",
+    "vme_target_panel2026": "(옛 기준) 개선표적 · 2026 신규패널 한정",
 }
+
+
+# ★드롭다운 그룹 순서 — 임상 위험도가 큰 것부터.
+SUBSET_GROUPS = ["VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
+
+
+def _subset_order(sid: str):
+    lb = SUBSET_LABELS.get(sid, sid)
+    for i, g in enumerate(SUBSET_GROUPS):
+        if lb.startswith(g):
+            return (i, lb)
+    return (len(SUBSET_GROUPS), lb)
 
 
 def load_subsets() -> dict:
@@ -877,7 +894,10 @@ class Handler(BaseHTTPRequestHandler):
                     {"id": sid,
                      "label": SUBSET_LABELS.get(sid, sid),
                      "count": sum(1 for x in SAMPLES if sid in x["subsets"])}
-                    for sid in sorted(SUBSETS)
+                    # ★그룹 → 라벨 순 정렬. 접두어(VME/운영비교/궤적/기술오류)로 묶여 보이고
+                    #   "(옛 기준)" 은 맨 아래로 간다.
+                    #   건수는 UI 가 붙이므로 라벨에 적지 않는다(옛 수치가 남는 사고를 막는다).
+                    for sid in sorted(SUBSETS, key=_subset_order)
                 ]
             })
             return
