@@ -360,6 +360,9 @@ def load_samples() -> list[dict]:
                     # df의 bmd_mic_order는 image_mic_order와 같은 눈금(0=최저농도, 14=전 농도 성장)
                     "bmd_choice": "" if hide_bmd else order_to_choice(row["bmd_mic_order"]),
                     "path": path,
+                    # ★캐시 무효화 기준(2026-09-14) — 격자는 이 parquet 이 정하므로
+                    #   PNG 원본 mtime 이 아니라 **이 파일의 mtime** 을 봐야 갱신이 감지된다.
+                    "src_path": src["parquet"],
                     "loader": loader,
                     "png_frames": png_frames,
                     "te_rows": te_rows,
@@ -550,16 +553,25 @@ def _cell_lock(key: str) -> threading.Lock:
 def _cache_stale(sample: dict, done_flag: str) -> bool:
     """원본이 캐시보다 새로우면(데이터 갱신) 캐시를 버린다.
 
-    2.5(png25)는 safetensors 가 없으므로 **첫 프레임 PNG** 의 mtime 을 본다.
+    ★**소스 parquet 의 mtime 도 본다**(2026-09-14 수정). 예전엔 2.5(png25)에서
+      **첫 프레임 PNG** 의 mtime 만 봤는데, 그것은 NAS 원본이라 **우리가 격자를 고쳐도
+      절대 변하지 않는다.** 그래서 프레임 순서를 정정해도 캐시가 그대로 재사용됐다
+      — 실측 사고: 정본 전환(09-11 17:11) 1시간 36분 **전**에 만들어진 캐시
+      (`E187S06R0__CIP` 09-11 15:35)가 계속 서빙돼 라벨러가 **뒤섞인 순서**를 보고 있었다.
+      격자는 소스 parquet 이 정하므로 그 파일의 mtime 이 진짜 기준이다.
     """
     try:
+        t_done = os.path.getmtime(done_flag)
+        src = sample.get("src_path")
+        if src and os.path.exists(src) and t_done < os.path.getmtime(src):
+            return True                       # ★소스 갱신 → 무조건 다시 뽑는다
         if sample.get("loader") == "png25":
             grid = sample.get("png_frames") or []
             first = next((c for r in grid for c in r if c), None)
             if not first:
                 return False
-            return os.path.getmtime(done_flag) < os.path.getmtime(first)
-        return os.path.getmtime(done_flag) < os.path.getmtime(sample["path"])
+            return t_done < os.path.getmtime(first)
+        return t_done < os.path.getmtime(sample["path"])
     except OSError:
         # 원본이 없으면 이미 뽑아 둔 캐시라도 그대로 쓴다
         return False
