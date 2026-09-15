@@ -78,6 +78,28 @@ SOURCES = [
         "allinfo": None,
     },
     {
+        # ★2.5 재현성(IVDR) — d25 와 같은 png25 로더. 같은 서버에서 사이드바 최상위로 전환된다.
+        #   ⚠bmd 정답이 없다(반복 일치도를 보는 시험이라 BMD 를 안 낸다).
+        #     `bmd_mic` 칸에는 **운영 판정(drast_mic)** 을 참고값으로 넣고
+        #     `bmd_mic_order` 는 None 이라 눈금에 정답 표시가 뜨지 않는다.
+        "id": "d25_repro",
+        "label": "dRAST2.5_재현성",
+        "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/repro25_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        # ★2.5 정확도(S26 Accuracy) — 임상·재현성과 나란한 3번째 축.
+        #   ⚠재현성과 달리 **bmd_mic 가 있다** → 정답 눈금을 표시한다(결측 30% · CAZC/CTXC 전건).
+        #   ⚠`drast_gng` 인코딩이 R/S(=성장/비성장) · breakpoint 는 CLSI 2025 로
+        #     dataset_170 과 버전이 다를 수 있다 · 균종 39% 가 Acinetobacter 계열.
+        "id": "d25_accuracy",
+        "label": "dRAST2.5_정확도",
+        "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/accuracy25_label_source.parquet",
+        "allinfo": None,
+    },
+    {
         "id": "sample_stability",
         "enabled": False,   # ★3.0 — 지금은 감춤(SHOW_30=1 로 되살린다)
         "label": "Sample_Stability",
@@ -126,6 +148,15 @@ SUBSET_LABELS = {
     "en_vme_ouronly": "EN ★★★우리만 VME (운영✓) — 최우선 표적",
     "en_vme_shared": "EN VME 공통 (운영도 냄)",
     "en_vme_oponly": "EN 운영만 VME (우리가 고침)",
+    # ★ME — VME 를 맞추고 나면 남는 격차(우리 41 vs 운영 38, 분모 S 3,824).
+    #   ⚠성격이 다르다: **운영은 ME 를 후처리로 잡는다**(op_dyn 79 → op_final 38, −41).
+    #     우리 41 은 후처리 없이 낸 값이라 운영 **모델 단계(79)보다 이미 훨씬 낫다**.
+    #     즉 3건 차이는 모델 격차가 아니라 후처리 유무일 수 있다.
+    #   우리만 ME 20건 = AZT 5 · PTZ 4 · TS 3 · IP 2 · CAZ 2 · ETP 1
+    #     균종 E. coli 8 · ★P. mirabilis 7(26검체뿐인데 과대) · 정지 6h 13 · 3h 5
+    "en_me_ouronly": "EN ★★우리만 ME (운영✓)",
+    "en_me_shared": "EN ME 공통 (운영도 냄)",
+    "en_me_oponly": "EN 운영만 ME (우리가 고침)",
     # ★2026 신규 패널(Enterobacteriaceae 18약제)에 드는 것만 — 앞으로의 실제 표적.
     #   정본 = release_25/dRASTBreakpoints_2026 new panel.csv (사용자 제공 2026-09-14).
     #   CIP·CZ·IP·TS 가 빠져 21건 → 10건이 된다. CIP 7건이 통째로 빠지는 게 크다.
