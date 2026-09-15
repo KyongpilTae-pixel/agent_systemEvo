@@ -211,7 +211,19 @@ def cdn_scope_note(microbial_id: str, genus: str = "") -> str:
 DEFAULT_TIME_LEN = 7
 
 # ★드롭다운 그룹 순서 — 임상 위험도가 큰 것부터.
-SUBSET_GROUPS = ["EN", "VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
+# ────────── 재현성(IVDR) — 반복 시험 간 판정이 흔들리는 패널 ──────────
+#   2026-09-15 신설(newmodel/build_repro_subsets25.py). 소스 `dRAST2.5_재현성` 전용.
+#   판정 = 같은 strain 반복 안의 **자기최빈 일치**(정확일치). strain=sample_id.split('-')[1].
+#   분모 = 운영이 MIC 를 낸 패널 7,047(= breakpoint 있는 조합 · drast_mic 유무와 예외없이 일치).
+SUBSET_LABELS.update({
+    "repro_mno_s3": "재현성 ★MNO Site3 불일치 (16)",
+    "repro_mno_mismatch": "재현성 MNO 불일치 전체 (40)",
+    "repro_our_mismatch": "재현성 우리 불일치 (434)",
+    "repro_op_only": "재현성 운영만 불일치 — 우리가 고침 (642)",
+    "repro_both": "재현성 공통 불일치 — 어려운 패널 (153)",
+})
+
+SUBSET_GROUPS = ["재현성", "EN", "VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
 
 
 def _subset_order(sid: str):
