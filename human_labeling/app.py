@@ -115,6 +115,16 @@ SUBSET_LABELS = {
     #   분모 5,357 → 15,216패널 · 표적 3건 → 44건.
     #   (운영 drast_mic VME 109 · 우리 cdn_6h 135 · 공유 91 · 우리만 44 · 운영만 18)
     "vme_unflagged": "VME ★★신호 미포착 — 최우선",
+    # ★EN 6h 축(2026-09-15) — 운영 기준선은 `op_6h`(lrcn_gng 재계산)다.
+    #   ⚠`drast_mic` 은 6h 가 아니라 dynamic(4.46h)+후처리 결과라 6h 비교에 쓰면 안 된다.
+    #   EN 6h VME: 우리 35 vs 운영 27 → 공유 22 · 우리만 13 · 운영만 5.
+    #   ★우리만 13건의 실패 양상 = **명백히 자란 웰을 NG 로 읽음**
+    #     (놓친 웰 18개: 절대성장 중앙 150,567 · 무효임계 6,300 을 100% 초과 ·
+    #      control 대비 중앙 0.820, 일부는 1.0 초과). 상대성장 함정이 아니다.
+    #   약제: PTZ 6 · GEN 2 · CZ 2 · CTX/CPM/AMP 각 1. ★PTZ 는 2026 패널에 남는다.
+    "en_vme_ouronly": "EN6h ★★★우리만 VME (운영✓) — 최우선 표적",
+    "en_vme_shared": "EN6h VME 공통 (운영도 냄)",
+    "en_vme_oponly": "EN6h 운영만 VME (우리가 고침)",
     # ★2026 신규 패널(Enterobacteriaceae 18약제)에 드는 것만 — 앞으로의 실제 표적.
     #   정본 = release_25/dRASTBreakpoints_2026 new panel.csv (사용자 제공 2026-09-14).
     #   CIP·CZ·IP·TS 가 빠져 21건 → 10건이 된다. CIP 7건이 통째로 빠지는 게 크다.
@@ -169,7 +179,7 @@ def cdn_scope_note(microbial_id: str, genus: str = "") -> str:
 DEFAULT_TIME_LEN = 7
 
 # ★드롭다운 그룹 순서 — 임상 위험도가 큰 것부터.
-SUBSET_GROUPS = ["VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
+SUBSET_GROUPS = ["EN6h", "VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
 
 
 def _subset_order(sid: str):
