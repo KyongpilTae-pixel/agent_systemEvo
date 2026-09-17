@@ -1104,6 +1104,7 @@ class Handler(BaseHTTPRequestHandler):
                     # 모델 MIC — 사람 판독과 대조용(참고 표시)
                     "op_mic": layout.get("op_mic"),
                     "cdn_mic": layout.get("cdn_mic"),
+                    "our_name": layout.get("our_name"),
                     # ★구조모델 값이 없는 사유(EN 전용 / 미추론)
                     "cdn_note": layout.get("cdn_note"),
                     "all_growth_label": f">={hi}",
