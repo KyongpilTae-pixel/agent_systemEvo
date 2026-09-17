@@ -220,6 +220,11 @@
   #bmdBox { display: none; align-items: center; gap: 6px; font-size: 13px; }
   body.show-bmd #bmdBox { display: inline-flex; }
   #bmdBox .lb { font-size: 11px; color: var(--muted); }
+  #refBox { margin-left: 10px; }
+  #refVal {
+    font-weight: 700; color: #6a1b9a; margin-left: 4px;
+  }
+  #refVal .sub { font-weight: 400; color: #777; font-size: 11px; margin-left: 5px; }
   #bmdVal {
     color: var(--bmd); font-weight: 600; font-variant-numeric: tabular-nums;
     border: 1px solid var(--bmd); border-radius: 6px; padding: 2px 8px;
@@ -302,8 +307,12 @@
         <span id="teWellCount" class="te-well-count" hidden></span>
       </div>
       <div id="bmdBox"><span class="lb">BMD</span><span id="bmdVal">—</span></div>
+      <!-- ★재현성 기준값 — 정본 mic_comparison_value(site×strain×약제 최빈,
+           multimodal 이면 directional median). 재현성 EA 는 이 값 대비로 매겨진다.
+           재현성 소스에서만 보인다. -->
+      <div id="refBox" style="display:none"><span class="lb">기준(최빈)</span><span id="refVal">—</span></div>
       <div id="micBox" hidden><span class="lb">운영</span><span id="opMic">—</span>
-        <span class="lb">cdn_6h</span><span id="cdnMic">—</span></div>
+        <span class="lb" id="cdnLbl">cdn_6h</span><span id="cdnMic">—</span></div>
       <div class="spacer"></div>
       <button class="btn" id="bmdToggle" title="BMD MIC 표시/감춤">BMD MIC<span class="kbd">b</span></button>
       <div class="zoom">
@@ -657,7 +666,7 @@ function mjTag(mj) {
   if (mj.op) parts.push(`<span class="mj ${cls(mj.op)}${split ? ' split' : ''}"` +
     ` title="운영(장비) 판정">운${mj.op}</span>`);
   if (mj.cdn) parts.push(`<span class="mj ${cls(mj.cdn)}${split ? ' split' : ''}"` +
-    ` title="cdn_6h 판정">cdn${mj.cdn}</span>`);
+    ` title="${mj.our_name || 'cdn_6h'} 판정">${(mj.our_name && mj.our_name !== 'cdn_6h') ? '우리' : 'cdn'}${mj.cdn}</span>`);
   if (mj.nG != null && mj.nstruct) parts.push(
     `<span class="mj" title="구조모델 ${mj.nstruct}개 중 G 로 본 수">${mj.nG}/${mj.nstruct}G</span>`);
   return parts.join('');
@@ -905,6 +914,7 @@ function setModelMic(d) {
   if (has) {
     $('#opMic').textContent = d.op_mic || '—';
     // ★구조모델 값이 없으면 사유를 대신 보여준다(빈칸이 버그로 보이지 않게)
+    $('#cdnLbl').textContent = d.our_name || 'cdn_6h';
     $('#cdnMic').textContent = d.cdn_mic || (d.cdn_note ? d.cdn_note : '—');
     $('#cdnMic').title = d.cdn_mic ? '' : (d.cdn_note || '');
     $('#cdnMic').style.fontSize = d.cdn_mic ? '' : '11px';
@@ -913,6 +923,20 @@ function setModelMic(d) {
 }
 function setBmd(d) {
   $('#bmdVal').textContent = (d && d.bmd_mic) ? d.bmd_mic : '—';
+  // ★재현성 기준값 — 우리/운영/threshold 의 (site×strain×약제) 기준 MIC.
+  //   재현성 EA 는 bmd 대비가 아니라 이 값 대비로 매겨진다.
+  var box = $('#refBox'), el = $('#refVal');
+  if (!box || !el) return;
+  var our = (d && d.ref_our) || '', op = (d && d.ref_op) || '', thr = (d && d.ref_thr) || '';
+  if (!our && !op && !thr) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  var parts = [];
+  if (our) parts.push('우리 ' + our);
+  if (op)  parts.push('운영 ' + op);
+  if (thr) parts.push('thr ' + thr);
+  el.innerHTML = parts.join('<span class="sub">·</span>');
+  el.title = '재현성 기준값 = site×strain×약제 그룹의 최빈 MIC'
+           + '(최빈이 여럿이면 directional median). 이 값 대비 ±1 희석이 EA 다.';
 }
 $('#bmdToggle').onclick = toggleBmd;
 

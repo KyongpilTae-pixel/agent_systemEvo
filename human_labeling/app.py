@@ -136,6 +136,14 @@ SUBSET_LABELS = {
     #     ③ 학습 sample 제외 **철회** — 운영축은 우리 학습셋을 모른다. 분모가 같아야 한다.
     #   분모 5,357 → 15,216패널 · 표적 3건 → 44건.
     #   (운영 drast_mic VME 109 · 우리 cdn_6h 135 · 공유 91 · 우리만 44 · 운영만 18)
+    # ────────── PA(P. aeruginosa) accuracy — 우리 ncdiff__enpa 6h vs 운영 (2026-09-17) ──────────
+    #   생성 = newmodel/build_pa_label25.py · 소스 `dRAST2.5_정확도` 전용 · 문제 = EA 실패 OR SIR 오류
+    #   accuracy 점수 우리 9.3574 < 운영 11.0801(n 126) · 차이는 CXT·CAZ·CPM(약제당 14검체)
+    "pa_acc_our_only": "PA ★★우리만 틀림 (운영✓) — 개선 표적",
+    "pa_acc_our_vmeme": "PA 우리 VME·ME (중대 오류)",
+    "pa_acc_both": "PA 둘 다 틀림 — 라벨·이미지 한계 의심",
+    "pa_acc_op_only": "PA 운영만 틀림 (우리가 맞힘)",
+    "pa_acc_mic_diff": "PA (참고) 우리 MIC ≠ 운영 MIC",
     "vme_unflagged": "VME ★★신호 미포착 — 최우선",
     # ★EN 축(2026-09-15 정정본) — ★우리 모델은 `drast_gng` 자리를 대체한다(사용자 확인).
     #   운영: lrcn_gng → svm_gng → additional rule → drast_gng → skip growth → drast_mic
@@ -223,7 +231,7 @@ SUBSET_LABELS.update({
     "repro_both": "재현성 공통 불일치 — 어려운 패널 (153)",
 })
 
-SUBSET_GROUPS = ["재현성", "EN", "VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
+SUBSET_GROUPS = ["재현성", "PA", "EN", "VME", "운영비교", "궤적", "기술오류", "(옛 기준)"]
 
 
 def _subset_order(sid: str):
@@ -392,6 +400,12 @@ def load_samples() -> list[dict]:
         for c in ("bmd_mic", "bmd_mic_order"):
             if c not in df.columns:
                 df[c] = ""
+        # ★재현성 기준값 — 정본 `mic_comparison_value`(site×strain×약제 최빈,
+        #   multimodal 이면 directional median). 재현성 EA 는 이 값 대비로 매겨진다.
+        for c in ("ref_our", "ref_op", "ref_thr", "ea_our", "ea_op"):
+            if c not in df.columns:
+                df[c] = ""
+            df[c] = df[c].fillna("")
         df[["organism_group", "microbial_id"]] = df[["organism_group", "microbial_id"]].fillna(
             "Unknown"
         )
@@ -450,6 +464,11 @@ def load_samples() -> list[dict]:
                     ],
                     "concentrations": concentrations,
                     "bmd_mic": "" if hide_bmd else str(row["bmd_mic"]),
+                    # ★재현성 기준값(정본) — 라벨러가 "이 strain·site 는 보통 X 로
+                    #   판정된다" 를 보고 이 반복만 다른지 판단할 수 있게 한다.
+                    "ref_our": str(row.get("ref_our") or ""),
+                    "ref_op": str(row.get("ref_op") or ""),
+                    "ref_thr": str(row.get("ref_thr") or ""),
                     # df의 bmd_mic_order는 image_mic_order와 같은 눈금(0=최저농도, 14=전 농도 성장)
                     "bmd_choice": "" if hide_bmd else order_to_choice(row["bmd_mic_order"]),
                     "path": path,
@@ -719,6 +738,7 @@ def ensure_cells(sample: dict) -> dict:
                 v = seq[conc_index]
                 return None if v == "" else ("G" if v == "0" else "NG")
             mj = {"cdn": _g(mr.get("cdn")), "op": _g(mr.get("op")),
+                  "our_name": mr.get("our_name") or "cdn_6h",
                   "nG": (mr.get("nG") or [None])[conc_index]
                         if mr.get("nG") and conc_index < len(mr["nG"]) else None,
                   "nstruct": mr.get("nstruct")}
@@ -744,6 +764,8 @@ def ensure_cells(sample: dict) -> dict:
     return {"time_len": time_len, "time_len_default": min(time_len, DEFAULT_TIME_LEN),
             "rows": rows,
             "cdn_mic": cdn_mic, "op_mic": (_mr or {}).get("op_mic"),
+            # ★우리 모델 이름 — 오버레이마다 다르다(d170 = cdn_6h · PA 정확도 = ncdiff__enpa)
+            "our_name": (_mr or {}).get("our_name") or "cdn_6h",
             # ★구조모델 값이 없을 때만 사유를 붙인다
             "cdn_note": "" if cdn_mic else cdn_scope_note(
                 str(sample.get("microbial_id", "")), str(sample.get("genus", "")))}
@@ -1052,6 +1074,9 @@ class Handler(BaseHTTPRequestHandler):
                         "antimicrobial": s["antimicrobial"],
                         "bmd_mic": s["bmd_mic"],
                         "bmd_choice": s["bmd_choice"],
+                        "ref_our": s.get("ref_our", ""),
+                        "ref_op": s.get("ref_op", ""),
+                        "ref_thr": s.get("ref_thr", ""),
                         "ambiguous": bool(lab and lab.get("ambiguous")),
                         "TE": bool(lab and lab.get("TE")),
             "TE_wells": (lab.get("TE_wells") if lab else []) or [],
