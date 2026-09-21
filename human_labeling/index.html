@@ -88,7 +88,8 @@
   .item .mic { font-size: 11px; color: var(--ok); font-variant-numeric: tabular-nums; }
   .item .badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; flex: 0 0 auto; }
   .item .badge.amb { background: rgba(255,171,0,.18); color: var(--warn); }
-  .item .badge.te { background: rgba(255,90,90,.18); color: #ff5a5a; }
+  .item .badge.prj { background:#eef4ff; color:#2f6fd0; border:1px solid #c7d9f5; font-weight:600; }
+    .badge.te { background: rgba(255,90,90,.18); color: #ff5a5a; }
 
   /* ---------- Folder tree ---------- */
   /* 폴더 헤더는 스크롤해도 위에 붙어 있게(sticky). 깊이별로 --node-h 만큼 아래에 쌓인다. */
@@ -503,11 +504,26 @@ function buildTree(samples) {
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
 const sortedChildren = (node) => [...node.children.values()].sort(byName);
 
+// ★같은 sample_id·약제가 project_id 만 다른 두 시험으로 들어오는 경우가 있다
+//   (접종량이 다름 · SNUH_2019 ↔ SNUH_2019_PBC_NX). 그 때만 목록에 project_id 를 붙여 가른다.
+let DUP_SID = new Set();
+function computeDupSid(list) {
+  const m = new Map();
+  for (const s of list) {
+    const k = s.sample_id + '|' + s.antimicrobial;
+    if (!m.has(k)) m.set(k, new Set());
+    m.get(k).add(s.project_id || '');
+  }
+  DUP_SID = new Set([...m].filter(([, v]) => v.size > 1).map(([k]) => k));
+}
+
 function makeItem(s) {
   const el = document.createElement('div');
   el.className = 'item' + (s.labeled ? ' done' : '') + (s.idx === curIdx ? ' active' : '');
   el.dataset.idx = s.idx;
+  const dup = DUP_SID.has(s.sample_id + '|' + s.antimicrobial);
   const badges =
+    (dup ? `<span class="badge prj" title="같은 검체·약제의 다른 시험(접종량 차이)">${s.project_id}</span>` : '') +
     (s.ambiguous ? '<span class="badge amb">AMB</span>' : '') +
     (s.TE ? '<span class="badge te">TE</span>' : '');
   el.innerHTML = `<span class="dot"></span><span class="sid">${s.sample_id}</span>` + badges +
@@ -544,7 +560,9 @@ function renderList() {
   let shown = SAMPLES;
   if (subsetFilter) shown = shown.filter(s => (s.subsets || []).includes(subsetFilter));
   if (bmdOnly) shown = shown.filter(s => s.has_bmd);
-  if (q) shown = shown.filter(s => s.sample_id.toLowerCase().includes(q));
+  if (q) shown = shown.filter(s => s.sample_id.toLowerCase().includes(q)
+                                  || (s.project_id || '').toLowerCase().includes(q));
+  computeDupSid(shown);
   const list = $('#list');
   list.innerHTML = '';
   const root = buildTree(shown);

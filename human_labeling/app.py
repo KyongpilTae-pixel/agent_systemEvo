@@ -968,6 +968,10 @@ class Handler(BaseHTTPRequestHandler):
             "group": s["group"],
             "src_label": s["src_label"],
             "sample_id": s["sample_id"],
+            # ★project_id (2026-09-21) — 같은 sample_id·약제가 **접종량이 다른 두 시험**으로
+            #   두 번 들어오는 경우가 있다(SNUH_2019 ↔ SNUH_2019_PBC_NX · d170 검체 3,739 중 160).
+            #   목록에서 어느 시험인지 못 가르면 판독이 엉뚱한 패널에 달린다.
+            "project_id": s["project_id"],
             "organism_group": s["organism_group"],
             "microbial_id": s["microbial_id"],
             "antimicrobial": s["antimicrobial"],
