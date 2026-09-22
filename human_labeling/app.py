@@ -180,6 +180,12 @@ SUBSET_LABELS = {
     "op_only_hard": "운영비교 운영✓ · 구조 과반 실패(≥9/18)",
     "op_only": "운영비교 운영✓ · 구조 일부 실패",
     "op_vs_struct": "운영비교 (참고) 구조 ≥1 실패",
+    # ★시간축 A/B — cdn_full(t0~t6) vs cdn_6h(t0·t2·t4·t6), 2026-09-22 사용자 지시.
+    #   d170 EN 15,216패널 · 시드 42 한 쌍(deploy_en) — VME 6h 135 · full 178 · full만 49 · 6h만 6 · 공통 129.
+    #   ⚠시드 1개라 시드 잡음이 섞여 있다(배포 축 시드 4·3개에서는 'full 전용(견고)' 0건).
+    #   시드 4개 결과(newmodel/eval_cdn_ts_ab25.py)로 교체 예정. 49건 중 32건만 소스에 있다.
+    "full_vme_only": "시간축 ★cdn_full 에서만 VME (cdn_6h ✓) · 시드42",
+    "full_vme_6honly": "시간축 (참고) cdn_6h 에서만 VME (cdn_full ✓) · 시드42",
     "cdn6h_worse": "운영비교 ★cdn_6h 열위 (운영✓ cdn✗)",
     "cdn6h_better": "운영비교 (참고) cdn_6h 우위 (운영✗ cdn✓)",
     "allwrong": "운영비교 전 구조 실패 웰 포함",
