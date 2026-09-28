@@ -128,6 +128,16 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── STMask A/B 사례 (2026-09-28 사용자 지시 "사례로 확인할 수 있도록") ──────────
+    #   생성 = newmodel/build_stmask_subsets25.py · 대조 cdn_full 4시드 vs +sm20P 4시드 · 공통 패널 5,816
+    #   ★sm20P 는 VME 를 3.25 줄이고 ME 를 7 늘려 가중식에서 상쇄됐다(−39 vs +42).
+    #     "오류를 줄인 게 아니라 옮겼다"를 눈으로 확인하는 용도다.
+    #   ⚠견고(시드 75%↑)는 **각 1건뿐**이다 — 나머지는 시드 잡음이라는 뜻이고, 그 자체가 기각 근거다.
+    #     `_any`(시드 1개↑)는 경향을 보려고 넓힌 것이라 잡음이 섞여 있다.
+    "stm_sm20P_me_up": "STMask sm20P — ME 새로 생김(견고 1건)",
+    "stm_sm20P_vme_down": "STMask sm20P — VME 사라짐(견고 1건)",
+    "stm_sm20P_me_up_any": "STMask sm20P — ME 새로 생김(전체 21건·잡음 포함)",
+    "stm_sm20P_vme_down_any": "STMask sm20P — VME 사라짐(전체 13건·잡음 포함)",
     # ────────── VME (임상 안전성 — 내성균을 놓치는 오류) ──────────
     #   2026-09-14 전면 재산출(newmodel/build_vme_subsets25.py). 셋을 고쳤다.
     #     ① 옛 목록은 dataset_170 **정정(9/11) 이전** 예측 산출이었다.
