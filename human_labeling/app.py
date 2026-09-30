@@ -128,6 +128,20 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── PTZ 4h 사례 (2026-09-29 사용자 지시 "4시간에 운영이 더 잘 맞힌 PTZ 필터") ──────────
+    #   생성 = newmodel/build_ptz_subsets25.py · PTZ 정답 R 42패널 대상
+    #   ★PTZ 는 우리 dynamic 의 VME 열위가 가장 몰린 약제이고(운영 7 → 우리 10),
+    #     정지를 늦춰도 줄지 않는다(고정 6h 도 10) = 조기판정이 아니라 판정기 문제다.
+    #   ⚠`our_better` 는 **0건**이다 — 이 약제에서 우리가 운영을 이긴 사례가 하나도 없다.
+    "ptz4h_op_better": "PTZ [고정4h 가정] 운영은 맞고 우리는 놓침 (8건 · 실제 출고 아님)",
+    "ptz4h_our_better": "PTZ [고정4h 가정] 우리는 맞고 운영은 놓침 (0건)",
+    #   ★출고 기준 실패 — dynamic 이 실제로 멈춘 시각의 판정이 VME 인 것.
+    "ptz_dyn_vme": "PTZ ★실제 dynamic VME (10건 · 출고 기준)",
+    #   ★가장 좁은 '우리만의 실패' — 운영은 맞혔는데 우리 dynamic 은 출고 시각에 VME.
+    "ptz_dyn_vme_oponly": "PTZ ★★우리만 VME · 운영은 맞힘 (3건)",
+    #   ★'우리가 실제로 놓친 6건'(사람 판독 = bmd 인 것) 중 **TE 표시된 5건**.
+    #     TE 웰이 대부분 c0(최저 농도)이고, 우리 4h 가 그 웰을 NG 로 읽어 MIC 이 <=8 로 내려갔다.
+    "ptz4h_te": "PTZ [고정4h 가정] TE 표시된 실패 (5건 · 대부분 c0)",
     # ────────── STMask A/B 사례 (2026-09-28 사용자 지시 "사례로 확인할 수 있도록") ──────────
     #   생성 = newmodel/build_stmask_subsets25.py · 대조 cdn_full 4시드 vs +sm20P 4시드 · 공통 패널 5,816
     #   ★sm20P 는 VME 를 3.25 줄이고 ME 를 7 늘려 가중식에서 상쇄됐다(−39 vs +42).

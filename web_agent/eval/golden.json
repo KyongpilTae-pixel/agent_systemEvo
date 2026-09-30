@@ -1,0 +1,247 @@
+[
+ {
+  "id": "g01",
+  "type": "용어",
+  "q": "VME가 뭐야?",
+  "tools": [
+   "glossary"
+  ],
+  "must": [
+   [
+    "R",
+    "내성"
+   ],
+   [
+    "S",
+    "감수성"
+   ]
+  ],
+  "forbid": [
+   "버스",
+   "VMEbus",
+   "bus"
+  ]
+ },
+ {
+  "id": "g02",
+  "type": "용어",
+  "q": "same_mic 학습셋이 뭐야? 크기도 알려줘",
+  "tools": [
+   "glossary"
+  ],
+  "must": [
+   [
+    "12,995",
+    "12995"
+   ]
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g03",
+  "type": "문서",
+  "q": "운영 권고 recipe가 뭐고 그 PASS, VME는?",
+  "tools": [
+   "search_knowledge"
+  ],
+  "must": [
+   "routed_iso_t65",
+   "103",
+   "1.99"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g04",
+  "type": "문서",
+  "q": "carbapenem VME 위험에 대한 과거 분석 결과를 출처와 함께 요약해줘",
+  "tools": [
+   "search_knowledge"
+  ],
+  "must": [
+   ".md"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g05",
+  "type": "운영",
+  "q": "지금 GPU에서 뭐가 돌고 있어?",
+  "tools": [
+   "queue_status"
+  ],
+  "must": [
+   "GPU"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g06",
+  "type": "수치",
+  "q": "3.0 complex_bl 모델의 FDA2023 임상 PASS 셀 수는?",
+  "tools": [
+   [
+    "list_models",
+    "cell_metrics"
+   ]
+  ],
+  "must": [
+   "129"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g07",
+  "type": "비교",
+  "q": "3.0에서 complex_bl 과 baseline 을 비교해줘",
+  "tools": [
+   "compare_models"
+  ],
+  "must": [
+   "129",
+   "121",
+   "16",
+   "81",
+   "85"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g08",
+  "type": "수치",
+  "q": "3.0 운영 시스템에서 Klebsiella pneumoniae 의 MP 셀 결과 알려줘",
+  "tools": [
+   "cell_metrics"
+  ],
+  "must": [
+   "103",
+   [
+    "83.5",
+    "83.50"
+   ],
+   "VME"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g09",
+  "type": "수치",
+  "q": "3.0 운영 시스템 재현성에서 실패한 약제는?",
+  "tools": [
+   "reproducibility"
+  ],
+  "must": [
+   "MP",
+   "PTZ"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g10",
+  "type": "수치",
+  "q": "3.0 baseline 모델의 Escherichia coli × CTX 셀 EA와 PASS 여부는?",
+  "tools": [
+   "cell_metrics"
+  ],
+  "must": [
+   "98.1"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g11",
+  "type": "수치",
+  "q": "2.5 nc_diff full ctlfix 시드 42 모델의 임상 PASS 셀 수는?",
+  "tools": [
+   [
+    "cell_metrics",
+    "list_models"
+   ]
+  ],
+  "must": [
+   "171"
+  ],
+  "forbid": [
+   "171 / 171",
+   "171/171",
+   "전부 PASS",
+   "모두 PASS"
+  ]
+ },
+ {
+  "id": "g12",
+  "type": "되묻기",
+  "q": "2.5 nc_diff full 모델 성적 알려줘",
+  "tools": [],
+  "must": [
+   [
+    "s42",
+    "s101",
+    "시드",
+    "어느",
+    "어떤",
+    "후보"
+   ]
+  ],
+  "forbid": [],
+  "note": "후보 5개 → 되묻거나 후보 제시"
+ },
+ {
+  "id": "g13",
+  "type": "되묻기",
+  "q": "MP 재현성 결과 알려줘",
+  "tools": [],
+  "must": [
+   "2.5",
+   "3.0"
+  ],
+  "forbid": [],
+  "note": "세대 불명 → 되묻기"
+ },
+ {
+  "id": "g14",
+  "type": "거절",
+  "q": "3.0 complex_bl 모델의 stability 데이터셋 성적은?",
+  "tools": [],
+  "must": [
+   [
+    "없",
+    "모르",
+    "확인할 수",
+    "제공되지"
+   ]
+  ],
+  "forbid_re": [
+   "\\d+\\.\\d+ ?%"
+  ],
+  "note": "도구 없음 → 숫자 지어내지 않기"
+ },
+ {
+  "id": "g15",
+  "type": "수치",
+  "q": "3.0 운영 시스템 전체 PASS 셀 수는?",
+  "tools": [
+   [
+    "cell_metrics",
+    "list_models"
+   ]
+  ],
+  "must": [
+   "174"
+  ],
+  "forbid": []
+ },
+ {
+  "id": "g16",
+  "type": "비교",
+  "q": "2.5에서 nc_diff full ctlfix s42 와 s101 을 셀 단위로 비교해줘",
+  "tools": [
+   "compare_models"
+  ],
+  "must": [
+   "171",
+   "166"
+  ],
+  "forbid": []
+ }
+]

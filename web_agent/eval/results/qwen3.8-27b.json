@@ -1,0 +1,274 @@
+{
+ "summary": {
+  "tag": "qwen3.8-27b",
+  "n": 16,
+  "pass": 15,
+  "tool_ok": 16,
+  "must_ok": 15,
+  "forbid_ok": 16,
+  "mean_sec": 16.0
+ },
+ "cases": [
+  {
+   "id": "g01",
+   "type": "용어",
+   "q": "VME가 뭐야?",
+   "called": [
+    "glossary"
+   ],
+   "sec": 8.5,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "**VME (Very Major Error)** = 실제 내성(R)인데 감수성(S)으로 오판한 경우.\n\n- 임상적으로 **최고위험** — 내성균을 감수성으로 잘못 판단하면 과소치료가 됩니다.\n- 반대 개념은 **ME** (Major Error): 실제 감수성(S)을 내성(R)으로 오판.\n- dRAST의 FDA PASS 기준(5기준: EA·CA·VME·ME·minE) 중 하나이며, VME가 발생하면 해당 셀(균종×약제)이 PASS에서 제외됩니다.\n\n출처: `claudeCode/GLOSSARY.md`"
+  },
+  {
+   "id": "g02",
+   "type": "용어",
+   "q": "same_mic 학습셋이 뭐야? 크기도 알려줘",
+   "called": [
+    "glossary"
+   ],
+   "sec": 5.1,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "**same_mic**은 dRAST struct 실험의 **기본 학습셋**입니다.\n\n- 파일: `train_valid_same_mic.parquet`\n- 크기: **12,995 패널**\n- traintest2024(full TRAIN)의 부분집합\n- 관련 변형: `same_mic_morph`(형태특징 포함판), `betalactam`(same_mic 모델로 pseudo-label)\n\n출처: `claudeCode/GLOSSARY.md`"
+  },
+  {
+   "id": "g03",
+   "type": "문서",
+   "q": "운영 권고 recipe가 뭐고 그 PASS, VME는?",
+   "called": [
+    "search_knowledge",
+    "glossary"
+   ],
+   "sec": 18.5,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "## 운영 권고 recipe\n\n**`routed_iso_t65`** (균형 ★) — **PASS 103/313, VME 1.99%**\n\n2026-05-27 Cycle 0~3 검증 + EA panel-notation bug fix 적용 완료.\n\n### 운영 옵션 매트릭스 (3 recipe)\n\n| Option | recipe | PASS | VME | 권고 |\n|---|---|---|---|---|\n| 적극 | `routed_iso_t50` | 111 | 3.56% ⚠ | PASS 우선, medical review 필수 |\n| **균형 ★** | `routed_iso_t65` | **103** | 1.99% | **운영 권고** |\n| 보수 | `routed_iso_t75` | 91 | 1.50% ✓ | VME FDA 엄격 통제 |\n\n- baseline raw = 72 / routed raw = 82 (EA bug fix 후 재측정)\n- pre-fix PASS 71 → bug fix 후 103 (+32)\n- 단일 라인 운영: `OperationalScorer.from_recipe(\"routed_iso_t65\")`\n\n### 참고\n- **EA bug fix**: `drastModules/mics.py::evalEA`의 BMD doubling ↔ dRAST half-dilution panel notation mismatch 수정. 모든 recipe에서 PASS→FAIL = 0 검증.\n- 2026-06-01 기준: 운영 권고 변경 없음 (기존 권고 강화).\n\n출처: `agent_system/OPERATIONAL_DEPLOYMENT.md`, `claudeCode/RESUME.md`, `claudeCode/daily_reports/2026-06-01.md`"
+  },
+  {
+   "id": "g04",
+   "type": "문서",
+   "q": "carbapenem VME 위험에 대한 과거 분석 결과를 출처와 함께 요약해줘",
+   "called": [
+    "search_knowledge",
+    "glossary"
+   ],
+   "sec": 28.8,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "## Carbapenem VME 위험 — 과거 분석 요약\n\n**VME 정의** (glossary): 내성(R)을 감수성(S)으로 오판하는 가장 위험한 오류(과소치료).\n\n### 1. 핵심 발견: organism-level mismatch\n전체 carbapenem R-share는 학습/임상이 잘 맞지만, **균종×약제 수준에서 큰 불일치**가 발견됨.\n\n| Organism × Drug | Train R | FDA R | Δ | 임상 위험 |\n|---|---|---|---|---|\n| **E. coli × MP** | 0.00 (n=231) | 0.08 (n=171) | −0.08 | **VME 가장 위험** ⚠️⚠️ |\n| E. coli × ETP | 0.02 (n=230) | 0.08 | −0.06 | VME |\n| E. coli × IP | 0.01 (n=192) | 0.07 | −0.06 | VME |\n| Serratia marcescens × MP | 0.00 (n=4) | 0.21 (n=38) | −0.21 | VME ⚠️ |\n| Serratia marcescens × ETP | 0.06 | 0.18 | −0.12 | VME ⚠️ |\n| Klebsiella oxytoca × IP | 0.00 | 0.10 | −0.10 | VME ⚠️ |\n\n**원인**: 학습 데이터에 **carbapenemase-positive E. coli가 거의 없음** (train R 1-2% vs FDA 7-8%).\n\n### 2. Drug class 차원 (shifted drugs 분석)\n- Carbapenem (IP/MP/ETP): under-pred +0.079 → **VME 증가 위험** (carbapenem 내성 놓침)\n- Aminoglycoside는 반대로 over-pred(+0.149) → ME 증가\n- → **Carbapenem under-pred가 가장 위험**, 학습 데이터 재구성 1순위\n\n### 3. 대응 방향\n- 단순 down-sample 부적합 → **rare R event 보강** 필요\n- 2026-07-23 재판독: **KP×MP 76% 상향**(전부 상향, +1~+7) → carbapenem under-call(VME 위험)의 **체계적 교정** 확인\n\n### 출처\n- `claudeCode/daily_reports/2026-05-15.md` (F. Carbapenem organism-level 심층 분석)\n- `claudeCode/daily_reports/2026-05-14.md` (I. Shifted drugs)\n- `claudeCode/RESUME.md` (Carbapenem organism-level / TL;DR)\n- `claudeCode/daily_reports/2026-07-23.md` (재판독 라벨)\n- `claudeCode/GLOSSARY.md` (VME 정의)"
+  },
+  {
+   "id": "g05",
+   "type": "운영",
+   "q": "지금 GPU에서 뭐가 돌고 있어?",
+   "called": [
+    "queue_status"
+   ],
+   "sec": 16.2,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "현재 **학습(train) 모드**로 4개 GPU가 모두 학습 작업으로 점유 중입니다.\n\n| GPU | 작업 | 메모리 | util | 경과 | 산출물 |\n|-----|------|--------|------|------|--------|\n| GPU0 | cx_50_bl | 9502/24564 MiB | 10% | 1-04:39:16 | Reproducibility_routed.xlsx |\n| GPU1 | cx_50_bl_s1 | 23482/24564 MiB | 7% | 1-04:39:16 | Reproducibility_routed.xlsx |\n| GPU2 | cx_50_bl_s2 | 23808/24564 MiB | 5% | 1-04:39:16 | Reproducibility_routed.xlsx |\n| GPU3 | cx_60_bl_s2 | 9506/24564 MiB | 2% | 1-04:59:21 | Reproducibility_routed.xlsx |\n\n**주의:** 4개 작업 모두 산출물 마지막 갱신이 **1608분(약 27시간) 전**이라 \"⚠정체?\" 표시가 붙어 있습니다. util도 2~10%로 낮아 실제로 멈췄을 가능성이 있으니 확인이 필요합니다.\n\n추론 작업은 현재 대기 중입니다(학습 XOR 추론 정책)."
+  },
+  {
+   "id": "g06",
+   "type": "수치",
+   "q": "3.0 complex_bl 모델의 FDA2023 임상 PASS 셀 수는?",
+   "called": [
+    "cell_metrics"
+   ],
+   "sec": 10.6,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "3.0 **complex_bl** (canonical: `complex__betalactam`)의 FDA2023 임상 평가 결과:\n\n| 항목 | 값 |\n|---|---|\n| **PASS 셀 수** | **129 / 129** (전부 PASS) |\n| VME 합계 | 0 |\n| ME 합계 | 5 |\n| 검체 패널 수 합계 | 6,136 |\n\n전체 129개 셀(균종×약제)이 모두 FDA 기준을 통과했습니다.\n\n출처: `/home/kptae/project/qnt_algorithm/claudeCode/output/struct_passfail_all.csv` (raw@0.5, iso 보정 전)"
+  },
+  {
+   "id": "g07",
+   "type": "비교",
+   "q": "3.0에서 complex_bl 과 baseline 을 비교해줘",
+   "called": [
+    "compare_models"
+   ],
+   "sec": 30.0,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "## 3.0: complex_bl vs baseline (FDA2023 임상, raw@0.5 iso 보정 전)\n\n**PASS 셀 (313개 공통 셀 기준)**\n\n| 항목 | complex_bl | baseline |\n|---|---|---|\n| 전체 PASS 셀 | **129** | **121** |\n\n- complex_bl만 PASS: **16** / baseline만 PASS: **8** → net +8 (complex_bl 우위)\n\n**PASS 전환 (복기)**\n- complex_bl만 PASS (16): C. freundii×AB, E. cloacae×AMP/CRO/ETP, E. avium×VAN, E. casseliflavus×TEI, E. faecalis×LNZ, E. gallinarum×AMP/LNZ, E. coli×ETP, K. aerogenes×CIP/LEV/MEV, K. pneumoniae×PTZ, K. variicola×IP, S. marcescens×CIP\n- baseline만 PASS (8): A. baumannii×PTZ, C. koseri×CRO/IP, E. avium×AMP, K. oxytoca×CIP, M. morganii×CIP, P. aeruginosa×CIP, S. marcescens×AMP\n\n**EA 승패 (셀 단위)**\n- complex_bl 우위: **79** / baseline 우위: **87** / 동점: **147**\n- EA가 baseline 쪽이 더 높은 셀이 8개 더 많음 (단, 차이 큰 셀은 complex_bl 우위가 다수)\n\n**VME / ME (적을수록 좋음)**\n\n| | complex_bl | baseline |\n|---|---|---|\n| VME 합 | **81** | 85 |\n| ME 합 | 641 | **615** |\n\n- VME는 complex_bl이 4건 적지만, ME는 complex_bl이 26건 더 많음.\n\n**EA 차이 큰 셀 (|차이|≥5%p, baseline−complex_bl)**\n- complex_bl이 크게 앞서는 대표: E. casseliflavus×AMP (84.6 vs 61.5, −23.1%p), E. gallinarum×LEV (75.0 vs 56.2, −18.8%p), Proteus vulgaris×ETP (76.5 vs 58.8, −17.7%p), K. aerogenes×CL (92.0 vs 76.0, −16.0%p)\n\n**요약**: PASS 셀 수와 VME는 complex_bl이 우위(129 vs 121, VME 81 vs 85)지만, 셀 단위 EA 승패(79 vs 87)와 ME(641 vs 615)는 baseline이 앞섬. PASS 전환은 net +8로 complex_bl 쪽.\n\n출처: `/home/kptae/project/qnt_algorithm/claudeCode/output/struct_passfail_all.csv` (2026-09-30 02:36)\n\n> 참고: EA_차이_큰_셀 목록이 중간에 잘려서 일부 셀은 안 보일 수 있습니다. 특정 균종/약제만 더 자세히 보시려면 알려주세요."
+  },
+  {
+   "id": "g08",
+   "type": "수치",
+   "q": "3.0 운영 시스템에서 Klebsiella pneumoniae 의 MP 셀 결과 알려줘",
+   "called": [
+    "cell_metrics"
+   ],
+   "sec": 9.1,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "3.0 운영 시스템(deployed)에서 **Klebsiella pneumoniae × MP** 셀 결과:\n\n| 항목 | 값 |\n|---|---|\n| 검체/패널 수 | 103 |\n| EA% | 83.5 |\n| CA% | 95.15 |\n| VME | 1건 |\n| ME | 0건 |\n| FDA PASS | ❌ (실패 기준: EA, VME) |\n\n**요약:** 이 셀은 **PASS 실패**입니다. EA%(83.5)가 기준 미달이고, VME 1건(실제 R을 S로 판정한 위험 오류)이 발생했기 때문입니다.\n\n출처: `/home/kptae/project/qnt_algorithm/claudeCode/data/FDA_Clinical_selected_model.xlsx` (fda2023 임상 평가셋, mtime 2026-06-08)"
+  },
+  {
+   "id": "g09",
+   "type": "수치",
+   "q": "3.0 운영 시스템 재현성에서 실패한 약제는?",
+   "called": [
+    "reproducibility"
+   ],
+   "sec": 9.3,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "3.0 운영 시스템(deployed) 재현성 평가에서 실패한 약제는 **2개**입니다:\n\n| 약제 |\n|------|\n| MP |\n| PTZ |\n\n전체 17개 약제 중 15개 PASS, 2개 FAIL입니다.\n\n출처: `/home/kptae/data/allinfo/analytical/FDA_Analytical_Reproducibility.xlsx`"
+  },
+  {
+   "id": "g10",
+   "type": "수치",
+   "q": "3.0 baseline 모델의 Escherichia coli × CTX 셀 EA와 PASS 여부는?",
+   "called": [
+    "cell_metrics"
+   ],
+   "sec": 9.2,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "**3.0 baseline — Escherichia coli × CTX**\n\n| 항목 | 값 |\n|---|---|\n| EA | 98.1% |\n| CA | 99.4% |\n| VME / ME | 0 / 0 |\n| 검체(패널) 수 | 161 |\n| FDA PASS | **PASS** (major 셀) |\n\n출처: `output/struct_passfail_all.csv` (fda2023 임상 평가셋, raw@0.5 iso 보정 전)"
+  },
+  {
+   "id": "g11",
+   "type": "수치",
+   "q": "2.5 nc_diff full ctlfix 시드 42 모델의 임상 PASS 셀 수는?",
+   "called": [
+    "cell_metrics",
+    "cell_metrics"
+   ],
+   "sec": 18.4,
+   "tool_ok": true,
+   "must_ok": false,
+   "forbid_ok": true,
+   "missing": [
+    "230"
+   ],
+   "forbidden": [],
+   "pass": false,
+   "answer": "**2.5 nc_diff full ctlfix 시드 42** (`lightpanel25ncdiff_base_center_full__ctlfix_s42__train_d170_en`)\n\n- **임상 PASS 셀 수: 171 / 171** (전부 PASS)\n- VME 합: 2건, ME 합: 3건\n- 검체 패널 수 합: 2,550\n\n출처: `.../judge25/clin_lightpanel25ncdiff_base_center_full__ctlfix_s42__train_d170_en.parquet` (2026-09-23)"
+  },
+  {
+   "id": "g12",
+   "type": "되묻기",
+   "q": "2.5 nc_diff full 모델 성적 알려줘",
+   "called": [
+    "cell_metrics"
+   ],
+   "sec": 9.8,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "\"nc_diff full\"로 5개 모델이 나와서 하나로 특정할 수 없습니다. 아래 후보 중 어느 모델인지 알려주세요:\n\n| # | 모델 |\n|---|------|\n| 1 | lightpanel25ncdiff_base_center_full__train_d170_en |\n| 2 | lightpanel25ncdiff_base_center_full__ctlfix_s42__train_d170_en |\n| 3 | lightpanel25ncdiff_base_center_full__ctlfix_s303__train_d170_en |\n| 4 | lightpanel25ncdiff_base_center_full__ctlfix_s101__train_d170_en |\n| 5 | lightpanel25ncdiff_base_center_full__ctlfix_s202__train_d170_en |\n\n- 1번은 ctlfix 없이 base만, 2~5번은 ctlfix + 시드(s42/s303/s101/s202) 버전입니다.\n- 특정 시드나 base만 보고 싶으시면 번호나 이름을 알려주시면 바로 성적을 조회해 드리겠습니다."
+  },
+  {
+   "id": "g13",
+   "type": "되묻기",
+   "q": "MP 재현성 결과 알려줘",
+   "called": [
+    "reproducibility"
+   ],
+   "sec": 12.7,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "3.0 운영(deployed) 모델의 MP 재현성(FDA analytical) 결과입니다.\n\n| Site | Best case | Worst case | Pass |\n|---|---|---|---|\n| Site 1 | 94/99 (94.9%) | 94/99 (94.9%) | ❌ |\n| Site 2 | 94/99 (94.9%) | 94/99 (94.9%) | ❌ |\n| Site 3 | 98/99 (99.0%) | 98/99 (99.0%) | ❌ |\n| **All sites** | **285/297 (96.0%)** | **285/297 (96.0%)** | ❌ |\n\n**결론: MP 는 재현성 기준 미달(Fail).** All sites 기준 96.0%로, 각 site 모두 Pass=false.\n\n출처: `/home/kptae/data/allinfo/analytical/FDA_Analytical_Reproducibility.xlsx` (2026-07-16 09:50)\n\n참고: 2.5 세대 MP 재현성도 함께 보시려면 말씀해 주세요."
+  },
+  {
+   "id": "g14",
+   "type": "거절",
+   "q": "3.0 complex_bl 모델의 stability 데이터셋 성적은?",
+   "called": [
+    "cell_metrics"
+   ],
+   "sec": 10.3,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "stability(안정성) 평가셋 성적은 현재 어떤 도구에도 없습니다.\n\n제가 조회할 수 있는 것은 **임상 평가셋(FDA2023 clinical)** 결과뿐입니다. 참고로 complex_bl(complex__betalactam)의 임상 성적은:\n\n- 셀 수: 313, PASS 셀: 129\n- VME 합: 81건, ME 합: 641건\n- 검체 패널 수 합: 17,313\n\nstability 데이터셋에 대한 수치가 필요하시면, 해당 결과가 저장된 문서나 파일 위치를 알려주시면 search_knowledge 로 찾아보겠습니다."
+  },
+  {
+   "id": "g15",
+   "type": "수치",
+   "q": "3.0 운영 시스템 전체 PASS 셀 수는?",
+   "called": [
+    "cell_metrics"
+   ],
+   "sec": 10.9,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "3.0 운영 시스템(deployed)의 **PASS 셀 수는 174**입니다.\n\n- 평가셋: FDA2023 임상\n- 전체 셀 174개 중 PASS 174개 (전부 PASS)\n- 참고: VME 합 10건, ME 합 16건, 검체 패널 합 12,833\n\n(참고: 성과표의 \"운영 166/317\"은 MIC 셀만 센 별도 집계라 이 수치와 다릅니다.)"
+  },
+  {
+   "id": "g16",
+   "type": "비교",
+   "q": "2.5에서 nc_diff full ctlfix s42 와 s101 을 셀 단위로 비교해줘",
+   "called": [
+    "compare_models"
+   ],
+   "sec": 48.0,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "## 2.5 nc_diff full ctlfix: s42 vs s101 (셀 단위 비교)\n\n평가셋: 2.5 임상(d170 Test) · 공통 셀 **230** (양쪽 모두 230, 한쪽에만 있는 셀 0)\n\n### PASS 셀 수\n| 모델 | 전체 PASS 셀 |\n|---|---|\n| s42 | **171** |\n| s101 | **166** |\n\n### PASS 전환 (양방향)\n- **s42만 PASS / s101은 FAIL (9개):** E. cloacae×AZT, E. cloacae×CTX, E. cloacae×IP, K. aerogenes×AB, K. aerogenes×CPM, K. pneumoniae×IP, P. mirabilis×PTZ, Raoultella×CIP, Raoultella×CTX\n- **s101만 PASS / s42는 FAIL (4개):** E. cloacae×CPM, E. cloacae×ETP, E. coli×ETP, K. pneumoniae×GEN\n\n### EA 셀별 승패\n- s42 쪽 EA 높은 셀: **20**\n- s101 쪽 EA 높은 셀: **14**\n- EA 같은 셀: **196**\n\n### VME / ME (적을수록 좋음)\n| 모델 | VME 합 | ME 합 |\n|---|---|---|\n| s42 | **42** | **20** |\n| s101 | **34** | **32** |\n\n- VME는 s101이 8건 적고, ME는 s101이 12건 많음.\n- VME가 줄어든 셀(8개): C. freundii×CZ(2→1), C. freundii×PTZ(2→1), E. coli×AZT(1→0), E. coli×ETP(1→0), E. coli×PTZ(9→8), K. pneumoniae×AMP(3→2), K. pneumoniae×GEN(1→0), P. mirabilis×ETP(1→0)\n\n### EA 차이 큰 셀 (s101 − s42, |차이|≥5%p)\n| 균종 | 약제 | n | s42 EA% | s101 EA% | 차이 |\n|---|---|---|---|---|---|\n| Raoultella | CTX | 1 | 100.0 | 0.0 | -100.0 |\n| E. cloacae | AZT | 9 | 100.0 | 77.8 | -22.2 |\n| P. mirabilis | TS | 5 | 100.0 | 80.0 | -20.0 |\n| E. cloacae | IP | 13 | 100.0 | 84.6 | -15.4 |\n| E. cloacae | CTX | 11 | 90.9 | 81.8 | -9.1 |\n| K. oxytoca | CPM | 12 | 100.0 | (절단) | (절단) |\n\n> 참고: 도구 결과가 중간에 절단되어 K. oxytoca×CPM 이후의 EA 차이 큰 셀 목록은 일부만 확인됩니다. 전체 목록이 필요하면 다시 조회해드릴 수 있습니다.\n\n**요약:** PASS 셀 수는 s42(171) > s101(166)로 s42가 5개 더 많고, 전환은 s42→s101에서 9개 PASS가 깨지고 4개만 새로 PASS. VME는 s101이 8건 적지만 ME는 12건 많아, 위험도(VME)와 정확도(ME)가 서로 상쇄되는 양상입니다."
+  }
+ ]
+}

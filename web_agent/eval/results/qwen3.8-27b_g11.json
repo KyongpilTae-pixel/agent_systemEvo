@@ -1,0 +1,30 @@
+{
+ "summary": {
+  "tag": "qwen3.8-27b_g11",
+  "n": 1,
+  "pass": 1,
+  "tool_ok": 1,
+  "must_ok": 1,
+  "forbid_ok": 1,
+  "mean_sec": 21.0
+ },
+ "cases": [
+  {
+   "id": "g11",
+   "type": "수치",
+   "q": "2.5 nc_diff full ctlfix 시드 42 모델의 임상 PASS 셀 수는?",
+   "called": [
+    "cell_metrics",
+    "cell_metrics"
+   ],
+   "sec": 21.0,
+   "tool_ok": true,
+   "must_ok": true,
+   "forbid_ok": true,
+   "missing": [],
+   "forbidden": [],
+   "pass": true,
+   "answer": "2.5 `nc_diff full ctlfix` 시드 42 모델의 **임상 PASS 셀 수는 171개**입니다.\n\n- 전체 셀: 230 → PASS 171\n- (PASS 셀 기준) VME 합 2건, ME 합 3건\n\n모델 정식명: `lightpanel25ncdiff_base_center_full__ctlfix_s42__train_d170_en`"
+  }
+ ]
+}
