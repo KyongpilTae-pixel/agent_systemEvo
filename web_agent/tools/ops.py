@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 
 from .. import config
@@ -17,9 +18,17 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m")
        "properties": {"section": {"type": "string", "enum": ["summary", "full"],
                                   "description": "summary=GPU 점유·실행중만(기본), full=대기열 포함"}}})
 def queue_status(section: str = "summary"):
-    r = subprocess.run(["bash", str(config.ROOT / "scripts/gpu_queue_status.sh")],
-                       capture_output=True, text=True, timeout=60, cwd=config.ROOT)
-    out = _ANSI.sub("", r.stdout)
+    script, snap = config.ROOT / "scripts/gpu_queue_status.sh", config.HERE / "exports/queue_status.txt"
+    live = script.exists() and shutil.which("bash") and shutil.which("nvidia-smi")
+    if live:
+        r = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=60, cwd=config.ROOT)
+        out, head = _ANSI.sub("", r.stdout), ""
+    elif snap.exists():   # 운영 PC: 학습 서버가 내보낸 스냅샷을 읽는다
+        import time
+        out = _ANSI.sub("", snap.read_text(errors="ignore"))
+        head = f"[스냅샷 {time.strftime('%Y-%m-%d %H:%M', time.localtime(snap.stat().st_mtime))} 기준 — 실시간 아님]\n"
+    else:
+        return {"error": "GPU 큐 현황 자료 없음(학습 서버 스냅샷 미생성)"}
     if section != "full":
         out = out.split("▸ 통합 실행큐 항목")[0]
-    return out.strip() or f"(출력 없음) stderr={r.stderr[-400:]}"
+    return head + out.strip() or "(출력 없음)"

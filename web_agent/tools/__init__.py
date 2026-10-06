@@ -59,4 +59,6 @@ def run(name: str, args_json: str) -> str:
 
 
 def load_all():
-    from . import knowledge, ops, metrics  # noqa: F401 — 등록 부작용
+    import importlib
+    for m in config.TOOL_MODULES:   # 등록 부작용. 배포 대상별로 켤 도구 묶음을 고른다
+        importlib.import_module(f"{__name__}.{m}")

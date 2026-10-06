@@ -33,4 +33,13 @@ KNOWLEDGE_GLOBS = [
     "claudeCode/total_summary/INDEX.md",
     "agent_system/*.md",
 ]
-EXTRA_KNOWLEDGE = [Path("/home/kptae/project/drastUtils/README.md")]
+EXTRA_KNOWLEDGE = [Path(p) for p in os.environ.get(
+    "EXTRA_KNOWLEDGE", "/home/kptae/project/drastUtils/README.md").split(os.pathsep) if p]
+
+# 평가 산출물 위치 — 운영 PC(Windows)로 옮길 때 이 환경변수만 바꾼다. 없는 경로의 도구는 "자료 없음" 오류를 돌려준다.
+R25_NEWMODEL = Path(os.environ.get("R25_NEWMODEL", "/home/kptae/project/drast_25_lrcn/newmodel"))
+F30_DEPLOY_REPRO = Path(os.environ.get(
+    "F30_DEPLOY_REPRO", "/home/kptae/data/allinfo/analytical/FDA_Analytical_Reproducibility.xlsx"))
+PY25 = os.environ.get("PY25", "/home/kptae/miniconda3/envs/qnt_algorithm/bin/python")   # 2.5 셀 계산용(lightgbm 필요)
+# 팀 전용 도구 묶음: 쉼표 목록. 다른 팀 배포에서는 "knowledge" 만 켠다.
+TOOL_MODULES = [m for m in os.environ.get("TOOL_MODULES", "knowledge,ops,metrics").split(",") if m]

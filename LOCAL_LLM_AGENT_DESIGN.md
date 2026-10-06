@@ -212,3 +212,18 @@ LLM 이 규약을 "기억"하게 하지 않고 **도구가 강제**한다.
 2. **라이선스**: **Apache-2.0 / MIT 모델만**.
 3. **UI**: **Open WebUI**.
 4. **범위**: **2.5 + 3.0 모두** 1차 포함 (GF 규칙·control 규칙·breakpoint·패널 키 분기를 도구가 처리).
+
+## 10. 운영 배포 전제 (2026-10-06 확정)
+
+| 항목 | 내용 | 설계 영향 |
+|---|---|---|
+| 실행 위치 | 이 서버 = 실험, 운영 = **별도 PC (Windows)** | vLLM 은 Windows 네이티브 미지원 → 운영 서빙은 **Ollama(GGUF)**. Agent 는 OpenAI 호환만 의존하므로 `LLM_BASE` 만 교체 |
+| GPU | **RTX A5000 24GB 1장** | TP=2 구성(§8.2 기본) 사용 불가. 후보 = Qwen3.8-27B Q4_K_M 16.5GB · gpt-oss-20b Q4_K_M 11.6GB (둘 다 Apache-2.0, `unsloth/*-GGUF`) |
+| 사용자 | **다른 팀까지** | 문서 Q&A 가 중심. 도구 묶음 분리(`TOOL_MODULES`: 공통=knowledge / 알고리즘 팀=ops,metrics). 문서별 접근 권한 필요 |
+| 데이터 | 운영 PC 에서 **이 서버 파일을 볼 수 있음** | 도구는 파일 읽기만. 실행이 필요한 것은 이 서버가 `web_agent/exports/` 로 내보냄 |
+
+**내보내기**: `export_snapshots.py`(qnt_algorithm env, 약 2분) → `exports/cells25.parquet`(111모델·19,818행) · `queue_status.txt` · `manifest.json`. 도구는 스냅샷 우선, 없으면 직접 계산. 검증: 스냅샷 기준 night_axes25 대조 **0/111 불일치**, 직접 계산과 동일.
+
+**경로 환경변수**(운영 PC 에서 매핑 드라이브로 지정): `QNT_ROOT` `R25_NEWMODEL` `F30_DEPLOY_REPRO` `EXTRA_KNOWLEDGE` `LLM_BASE` `LLM_MODEL` `TOOL_MODULES`.
+
+**남은 일**: ① GGUF 2종을 Ollama 1장 구성으로 골든셋 재채점(양자화 포맷이 달라 §8.2 순위는 참고용) ② bash 기동 스크립트의 Windows 대체(ps1) ③ 스냅샷 주기 실행(cron) ④ 타 팀 문서 수집·권한 구조 ⑤ 의미 기반 검색(bge-m3).

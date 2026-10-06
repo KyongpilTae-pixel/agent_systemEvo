@@ -24,14 +24,14 @@ from .. import config
 from . import tool
 
 R30 = config.ROOT / "claudeCode"
-R25 = Path("/home/kptae/project/drast_25_lrcn/newmodel")
+R25 = config.R25_NEWMODEL
 F30_CELLS = R30 / "output/struct_passfail_all.csv"
 F30_DEPLOY = R30 / "data/FDA_Clinical_selected_model.xlsx"
 D30_REPRO = R30 / "output/repro"
-F30_DEPLOY_REPRO = Path("/home/kptae/data/allinfo/analytical/FDA_Analytical_Reproducibility.xlsx")
+F30_DEPLOY_REPRO = config.F30_DEPLOY_REPRO
 F25_AXES = R25 / "data/night_axes25.csv"
 F25_REPRO = R25 / "output/repro_ivdr.csv"
-PY25 = "/home/kptae/miniconda3/envs/qnt_algorithm/bin/python"
+PY25 = config.PY25
 MAX_ROWS = 40
 
 COLNAMES = {"org": "균종", "antimicrobial": "약제", "n": "검체_패널_수", "EA": "EA_%", "CA": "CA_%",
@@ -116,14 +116,32 @@ def _pick25(model: str) -> str:
                      "→ 후보 중 하나로 다시 호출하거나 사용자에게 어느 모델인지 물을 것")
 
 
+EXPORT25 = config.HERE / "exports/cells25.parquet"
+
+
+@lru_cache(maxsize=4)
+def _export25(mtime: float) -> pd.DataFrame:   # mtime 을 키로 써서 내보내기가 갱신되면 다시 읽는다
+    return pd.read_parquet(EXPORT25)
+
+
 @lru_cache(maxsize=64)
-def _cells25(canon: str) -> tuple[pd.DataFrame, str]:
+def _cells25_live(canon: str) -> tuple[pd.DataFrame, str]:
     r = subprocess.run([PY25, str(Path(__file__).with_name("_cells25.py")), "cells", canon],
                        capture_output=True, text=True, timeout=600)
     out = json.loads(r.stdout.strip().splitlines()[-1])
     if "error" in out:
         raise ValueError(out["error"])
     return pd.DataFrame(out["table"]), out["source"]
+
+
+def _cells25(canon: str) -> tuple[pd.DataFrame, str]:
+    """내보낸 스냅샷(export_snapshots.py) 우선 — 운영 PC 는 2.5 코드를 실행할 수 없다. 없으면 이 서버에서 직접 계산."""
+    if EXPORT25.exists():
+        d = _export25(EXPORT25.stat().st_mtime)
+        t = d[d.canon == canon]
+        if len(t):
+            return t.drop(columns=["canon", "source"]).reset_index(drop=True), f"{EXPORT25} (원본 {t.source.iloc[0]})"
+    return _cells25_live(canon)
 
 
 # ---------- 공통 ----------
@@ -166,7 +184,8 @@ def _cell_frame(version: str, model: str) -> tuple[pd.DataFrame, dict]:
     t, src = _cells25(c)
     f = pd.DataFrame({"org": t.microbial_id, "antimicrobial": t.antimicrobial, "n": t.n, "EA": t.EA, "CA": t.CA,
                       "VME": t.VME, "ME": t.ME, "pass": t.passed, "reason": t.get("reason")})
-    return f, {"평가셋": "2.5 임상(d170 Test)", "model": c, "source": src, "mtime": _mtime(Path(src))}
+    return f, {"평가셋": "2.5 임상(d170 Test)", "model": c, "source": src,
+               "mtime": _mtime(EXPORT25 if src.startswith(str(EXPORT25)) else Path(src))}
 
 
 @tool("list_models",
