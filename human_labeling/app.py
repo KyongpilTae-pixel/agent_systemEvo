@@ -99,6 +99,55 @@ SOURCES = [
         "parquet": "/home/kptae/data/allinfo/d25/accuracy25_label_source.parquet",
         "allinfo": None,
     },
+    # ★FDA analytical 6셋 — 2.5 (2026-10-07 사용자 지시 "이 데이터셋들도 레이블 시스템에 넣어줘").
+    #   d25 와 같은 `png25` 로더. 같은 서버에서 사이드바 최상위로 전환된다.
+    #   ⚠**bmd 정답이 없다** — 간섭물질·안정성은 control 검체 MIC 중앙값 대비 ±1희석으로 EA 를
+    #     재는 시험이라 BMD 를 안 낸다. 재현성과 같은 처리로 `bmd_mic` 칸에는
+    #     **운영 판정(drast_mic)** 을 참고값으로 넣고 `bmd_mic_order=None` 이라 눈금에
+    #     정답 표시가 뜨지 않는다(라벨이 모델/운영 쪽으로 끌려가지 않게).
+    #   ★BCBE 2종도 포함(2026-10-07 지시) — **평가는 대기**(bmd 부재)지만 라벨링은 가능하다.
+    #     bmd 가 없는 셋이야말로 사람 판독이 유일한 기준이 된다.
+    #   ★문제 검체 참고(우리만 실패 기준): Q237(K.pneumoniae)·Q127(E.coli)·Q185/Q182(S.aureus).
+    {
+        "id": "d25_an_s26_intf", "label": "dRAST2.5_an_S26간섭물질", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_s26_intf_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_e27_intf", "label": "dRAST2.5_an_E27간섭물질", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_e27_intf_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_s27_intf", "label": "dRAST2.5_an_S27간섭물질GP", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_s27_intf_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_gn_s26_stab", "label": "dRAST2.5_an_GN_S26안정성", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_gn_s26_stab_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_gn_e27_stab", "label": "dRAST2.5_an_GN_E27안정성", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_gn_e27_stab_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_gp_s27_stab", "label": "dRAST2.5_an_GP_S27안정성", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_gp_s27_stab_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_s26_bcbe", "label": "dRAST2.5_an_S26혈액배양병", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_s26_bcbe_label_source.parquet",
+        "allinfo": None,
+    },
+    {
+        "id": "d25_an_e27_bcbe", "label": "dRAST2.5_an_E27혈액배양병", "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/an_e27_bcbe_label_source.parquet",
+        "allinfo": None,
+    },
     {
         "id": "sample_stability",
         "enabled": False,   # ★3.0 — 지금은 감춤(SHOW_30=1 로 되살린다)
@@ -142,6 +191,18 @@ SUBSET_LABELS = {
     #   ★'우리가 실제로 놓친 6건'(사람 판독 = bmd 인 것) 중 **TE 표시된 5건**.
     #     TE 웰이 대부분 c0(최저 농도)이고, 우리 4h 가 그 웰을 NG 로 읽어 MIC 이 <=8 로 내려갔다.
     "ptz4h_te": "PTZ [고정4h 가정] TE 표시된 실패 (5건 · 대부분 c0)",
+    # ────────── prev_ctl 끌림 사례 (2026-10-07 사용자 지시 "육안으로 확인해볼께") ──────────
+    #   생성 = newmodel/build_prevctl_subsets25.py · `complex_full` 로 PTZ 277패널 추론 → 끌림 16건
+    #   `prev_ctl` = head 의 `직전 농도` 슬롯을 control 로 치환한 **두 번째 추론**(재학습 없음).
+    #   ★전체 정밀도 56%(9건 중 5건) · 재현율 100% · 역방향(G→NG) 0건.
+    #     Δp(=p_정상−p_prevctl) >= 0.7 로 거르면 정밀도 80% 로 오르나 1건을 놓친다.
+    #   ⚠`prev_ctl` **전면적용은 기각**됐다(VME↓ ME↑ · 예외 없이 한 방향). 여기 쓰는 것은
+    #     판정기 교체가 아니라 **끌림 진단 신호**로서의 쓸모를 보는 것이다.
+    "prevctl_ok": "prev_ctl ✅올바른 교정 — bmd 도 G 인데 NG 였고 풀렸다 (5건)",
+    "prevctl_fp": "prev_ctl ★잘못 되살림 — bmd 는 NG 인데 G 로 바뀜 (4건 · 정밀도를 깎는 쪽)",
+    "prevctl_missed": "prev_ctl ★임계로 놓침 — bmd 도 G 인데 Δp<0.7 (1건)",
+    "prevctl_held": "prev_ctl 올바르게 가림 — bmd 는 NG 이고 안 풀렸다 (7건)",
+    "prevctl_all": "prev_ctl PTZ 끌림 전체 (16건)",
     # ────────── STMask A/B 사례 (2026-09-28 사용자 지시 "사례로 확인할 수 있도록") ──────────
     #   생성 = newmodel/build_stmask_subsets25.py · 대조 cdn_full 4시드 vs +sm20P 4시드 · 공통 패널 5,816
     #   ★sm20P 는 VME 를 3.25 줄이고 ME 를 7 늘려 가중식에서 상쇄됐다(−39 vs +42).
