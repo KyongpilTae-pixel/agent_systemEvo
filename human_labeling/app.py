@@ -203,6 +203,27 @@ SUBSET_LABELS = {
     "prevctl_missed": "prev_ctl ★임계로 놓침 — bmd 도 G 인데 Δp<0.7 (1건)",
     "prevctl_held": "prev_ctl 올바르게 가림 — bmd 는 NG 이고 안 풀렸다 (7건)",
     "prevctl_all": "prev_ctl PTZ 끌림 전체 (16건)",
+    # ── ★ME 중심 육안 필터 (2026-10-07 사용자 지시 "me가 늘어난 것은 육안 판정이 필요함") ──
+    #   생성 = newmodel/build_prevctl_me_subsets25.py · `complex_full` **전 약제** 정상 vs prev_ctl 비교.
+    #   bmd 기준 순효과 = ME +26 / VME −8. 그런데 ★**bmd 가 이 구간에서 사람 판독과 15.2% 만 일치**한다
+    #     → 사람 판독 46건 재채점: prev_ctl 60.9% · 기존 28.3%[[prevctl-scoring-basis-25]].
+    #   ME_new 8건 중 **5건은 prev_ctl 이 사람과 일치**(= 가짜 ME). 남은 18건이 비율을 확정한다.
+    #   ⚠`prev_ctl` 은 **단방향**(MIC 를 올리기만 함) — 판정이 S→R 로만 움직인다.
+    #     그래서 "ME 가 늘었다"는 말은 "bmd 가 S 라고 한 웰을 모델이 R 로 봤다"는 뜻일 뿐,
+    #     **이미지가 어느 쪽인지는 눈으로 봐야** 안다. 이 서브셋의 목적이 정확히 그것이다.
+    #   ★판정 기준: 농도축을 낮은 쪽부터 읽어 **성장한 최고 농도의 다음**이 MIC 다.
+    "prevctl_me_new": "★prev_ctl ME 새로 생김 — 최우선 육안 (26건 · bmd S → prev_ctl R)",
+    "prevctl_me_new_MP": "  └ ME 새로 생김 · MP (5건)",
+    "prevctl_me_new_IP": "  └ ME 새로 생김 · IP (5건)",
+    "prevctl_me_new_PTZ": "  └ ME 새로 생김 · PTZ (4건 · 사람 판독 4/4 prev_ctl 승)",
+    "prevctl_me_new_AZT": "  └ ME 새로 생김 · AZT (4건)",
+    "prevctl_me_new_CIP": "  └ ME 새로 생김 · CIP (3건)",
+    "prevctl_me_new_CAZ": "  └ ME 새로 생김 · CAZ (3건)",
+    "prevctl_vme_fix": "prev_ctl ✅VME 해소 — 얻는 쪽 (8건 · 사람 판독 7/7 prev_ctl 승)",
+    "prevctl_me_fix": "prev_ctl ME 해소 (0건)",
+    "prevctl_vme_new": "prev_ctl ★VME 새로 생김 — 잃는 쪽 (0건)",
+    "prevctl_sir_diff": "prev_ctl SIR 이 바뀐 패널 전체 (51건)",
+    "prevctl_mic_diff": "prev_ctl MIC 만 바뀜 · SIR 동일 (60건)",
     # ────────── STMask A/B 사례 (2026-09-28 사용자 지시 "사례로 확인할 수 있도록") ──────────
     #   생성 = newmodel/build_stmask_subsets25.py · 대조 cdn_full 4시드 vs +sm20P 4시드 · 공통 패널 5,816
     #   ★sm20P 는 VME 를 3.25 줄이고 ME 를 7 늘려 가중식에서 상쇄됐다(−39 vs +42).
