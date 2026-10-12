@@ -235,6 +235,12 @@ SUBSET_LABELS = {
     # ★LEV confidence threshold 0.7 (dynamic 기준) 로 **나빠진** 패널 — 적용 여부 판단용.
     #   `lev_dyn_changed.csv` 의 나빠짐=True 고유 패널 8건. 사람 판독으로 bmd 오류인지 가린다.
     "lev_thr07_worse": "★LEV thr 0.7 적용 손실 — dynamic 기준 (8건)",
+    # ★trailing — "많이 자랐는데(last growth_rate>=0.20) bmd 는 NG" 인 웰을 가진 패널.
+    #   전 신호가 무너지는 구간이다(우리 44.0% · 운영 lrcn 45.1% · 규칙 7.1%).
+    #   규모 2.56% 가 라벨↔이미지 충돌 상한 3.27% 와 비슷해 **라벨 천장인지 모델 약점인지**
+    #   사람 판독으로 가려야 한다. miss4 = 4시드 전원이 놓친 것(구조적).
+    "trail_miss4": "★trailing 4시드 전원 놓침 — 자랐는데 bmd NG (166패널/229웰)",
+    "trail_all": "trailing 전체 — 자랐는데 bmd NG (331패널/534웰)",
     "cmpncd_both_wrong": "★둘 다 틀림 — 육안 1순위(bmd 를 의심할 구간) (5건)",
     "cmpncd_cre": "★CRE 셀에서 갈림 — IP·MP·ETP (7건 · VME=격리 누락)",
     "cmpncd_ncdiff_win": "ncdiff 가 bmd 와 일치 (30건)",
@@ -767,6 +773,26 @@ if os.path.exists(_p3):
         print(f"[human-labeling] 3구조 판정 맵 {len(PRED3):,} 패널", flush=True)
     except Exception as e:                                             # noqa: BLE001
         print(f"[human-labeling] ⚠3구조 판정 맵 로드 실패: {e}", flush=True)
+
+# ★trailing 웰 맵(2026-10-12) — "많이 자랐는데 bmd 는 NG" 인 웰.
+#   정의: last growth_rate >= 0.20 AND bmd 기준 정답 NG.
+#   `nmiss` = 4시드 중 몇 개가 이 웰을 G 로 **놓쳤는가**(4 면 전원 놓침 = 구조적).
+#   ★읽기 전용 표시다 — 사람 판독을 이 웰로 유도하기 위한 것이고 라벨이 아니다.
+#   판독 목적: bmd 가 맞는지(= 라벨 천장) 이미지가 맞는지(= 모델 약점) 가린다.
+TRAIL = {}
+_tp = '/home/kptae/data/allinfo/d25/trail_wells_map25.csv'
+if os.path.exists(_tp):
+    try:
+        with open(_tp, newline='', encoding='utf-8-sig') as f:
+            for r in csv.DictReader(f):
+                TRAIL[(r['project_id'], r['sample_id'], r['antimicrobial'])] = {
+                    'concs': (r.get('concs') or '').split(),
+                    'nmiss': (r.get('nmiss') or '').split(),
+                    'gr': (r.get('gr') or '').split(),
+                    'thr': r.get('thr', '')}
+        print(f"[human-labeling] trailing 웰 맵 {len(TRAIL):,} 패널", flush=True)
+    except Exception as e:                                             # noqa: BLE001
+        print(f"[human-labeling] ⚠trailing 웰 맵 로드 실패: {e}", flush=True)
 
 LABELS = load_labels()
 
@@ -1320,6 +1346,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ambiguous_dyn": bool(lab and lab.get("ambiguous_dyn")),
                     # ★3구조 dynamic 판정 + 정지시각(표시용). 값이 여러 개면 시드마다 다름.
                     "pred3": PRED3.get((s["project_id"], s["sample_id"], s["antimicrobial"]), {}),
+                    "trail": TRAIL.get((s["project_id"], s["sample_id"], s["antimicrobial"]), {}),
                     "dyn_t": (DYN_STOP.get((s["project_id"], s["sample_id"])) or {}).get("t", ""),
                     "ambiguous": bool(lab and lab.get("ambiguous")),
                     "TE": bool(lab and lab.get("TE")),

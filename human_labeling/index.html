@@ -231,6 +231,11 @@
   #basisBox, #predBox { display:flex; align-items:center; gap:6px; font-size:12px;
     padding:2px 8px; border-left:1px solid var(--border); white-space:nowrap }
   #basisBox label { display:flex; align-items:center; gap:3px; cursor:pointer }
+  /* ★trailing 웰 표시 — 읽기 전용. 다크 테마라 배경은 반투명으로. */
+  .grid tr.trail-row > td.row-conc { box-shadow: inset 3px 0 0 var(--warn) }
+  .trail-tag { display:inline-block; background:rgba(255,171,0,.22); color:var(--warn);
+    border-radius:4px; padding:0 4px; font-size:10px; font-weight:700; margin-right:4px;
+    vertical-align:middle; cursor:help }
   #basisBox.dyn { background:rgba(255,171,0,.16); border-radius:5px }
   #basisBox.dyn, #basisBox.dyn label, #basisBox.dyn #dynT { color:var(--warn) }
   #predVal { font-family:ui-monospace,monospace; font-size:11px }
@@ -772,6 +777,9 @@ function updateTeWellCount() {
 function renderGrid(d) {
   const canvas = $('#canvas');
   TE_WELLS = new Set(d.TE_wells || []);
+  // ★trailing 웰 — 읽기 전용 표시(라벨이 아니다). 판독 시선을 이 농도로 유도한다.
+  const TRL = d.trail || {};
+  const trlC = TRL.concs || [];
   let ctlSeen = 0;
   // ★기본은 6시간(t0~t6)까지만. 'showFull' 이면 전체를 보여준다.
   const TFULL = d.time_len;
@@ -791,13 +799,18 @@ function renderGrid(d) {
     // 웰 토큰: control 은 k<순번>, 농도는 c<농도인덱스>
     const tok = row.is_control ? 'k' + ctlSeen++ : 'c' + row.conc_index;
     const onWell = TE_WELLS.has(tok);
+    const ti = row.is_control ? -1 : trlC.indexOf(String(row.label));
+    const trl = ti >= 0
+      ? `<span class="trail-tag" title="많이 자랐는데(growth_rate ${(TRL.gr||[])[ti]} >= ${TRL.thr}) bmd 는 NG`
+        + ` · 4시드 중 ${(TRL.nmiss||[])[ti]}개가 G 로 놓침">TR ${(TRL.nmiss||[])[ti]}/4</span>`
+      : '';
     const cls = [isBmd ? 'bmd-row' : '', te.hit ? 'te-row' : '',
-                 onWell ? 'te-well-row' : ''].filter(Boolean).join(' ');
+                 onWell ? 'te-well-row' : '', ti >= 0 ? 'trail-row' : ''].filter(Boolean).join(' ');
     html += `<tr${cls ? ` class="${cls}"` : ''}>`;
     html += `<td class="row-conc${row.is_control ? ' cont' : ''}">` +
             `<span class="te-well${onWell ? ' on' : ''}" data-well="${tok}"` +
             ` title="이 칸을 기술오류로 표시 (사람 판정)">TE</span>` +
-            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + te.html + mj + `${row.label}</td>`;
+            (isBmd ? '<span class="bmd-tag">BMD</span>' : '') + trl + te.html + mj + `${row.label}</td>`;
     row.cells.slice(0, T).forEach((src, t) => {
       html += `<td class="cell"><img loading="lazy" src="${src}" data-r="${r}" data-t="${t}"></td>`;
     });
