@@ -226,10 +226,13 @@
     font-weight: 700; color: #6a1b9a; margin-left: 4px;
   }
   #refVal .sub { font-weight: 400; color: #777; font-size: 11px; margin-left: 5px; }
+  /* ★다크 테마다 — 밝은 배경(#fff4e5)을 주면 흰 글자가 묻힌다(2026-10-12 사용자 지적).
+     강조는 반투명 배경 + 글자색을 **함께** 지정한다. */
   #basisBox, #predBox { display:flex; align-items:center; gap:6px; font-size:12px;
-    padding:2px 8px; border-left:1px solid #ddd; white-space:nowrap }
+    padding:2px 8px; border-left:1px solid var(--border); white-space:nowrap }
   #basisBox label { display:flex; align-items:center; gap:3px; cursor:pointer }
-  #basisBox.dyn { background:#fff4e5 }
+  #basisBox.dyn { background:rgba(255,171,0,.16); border-radius:5px }
+  #basisBox.dyn, #basisBox.dyn label, #basisBox.dyn #dynT { color:var(--warn) }
   #predVal { font-family:ui-monospace,monospace; font-size:11px }
   #bmdVal {
     color: var(--bmd); font-weight: 600; font-variant-numeric: tabular-nums;
