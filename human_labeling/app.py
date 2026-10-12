@@ -224,6 +224,25 @@ SUBSET_LABELS = {
     "prevctl_vme_new": "prev_ctl ★VME 새로 생김 — 잃는 쪽 (0건)",
     "prevctl_sir_diff": "prev_ctl SIR 이 바뀐 패널 전체 (51건)",
     "prevctl_mic_diff": "prev_ctl MIC 만 바뀜 · SIR 동일 (60건)",
+    # ── complex(base) vs noconcent_diff 갈린 패널 (2026-10-12 사용자 지시 "다르게 판정한 것들
+    #    분석 리포트 + labeling 링크 + 필터") ──
+    #   생성 = newmodel/build_cmp_ncdiff_base25.py · EN 시점별 dynamic(c4=.980 c5=.940) · 4시드.
+    #   ★시드 일관성으로 먼저 거른다 — 4시드 중 **3회 이상** 갈린 것만 구조 차이(68건)이고
+    #     1~2회(204건)는 시드 잡음이다[[ab-seed-noise-dominates]]. 섞어 보면 규모를 4배 부풀린다.
+    #   ⚠bmd 승패로 결론내지 말 것 — 끌림 구간 bmd 는 사람 판독과 15% 만 맞는다
+    #     [[prevctl-scoring-basis-25]]. 그래서 `both_wrong` 과 `cre` 를 육안 1순위로 뽑았다.
+    "cmpncd_struct_diff": "★complex vs ncdiff 구조 차이 — SIR 3/4 이상 갈림 (68건)",
+    "cmpncd_both_wrong": "★둘 다 틀림 — 육안 1순위(bmd 를 의심할 구간) (5건)",
+    "cmpncd_cre": "★CRE 셀에서 갈림 — IP·MP·ETP (7건 · VME=격리 누락)",
+    "cmpncd_ncdiff_win": "ncdiff 가 bmd 와 일치 (30건)",
+    "cmpncd_base_win": "complex(base) 가 bmd 와 일치 (33건)",
+    "cmpncd_seed_noise": "시드 잡음 — SIR 1~2/4 만 갈림 (204건 · 구조 차이 아님)",
+    "cmpncd_PTZ": "  └ 구조 차이 · PTZ (6건)",
+    "cmpncd_IP": "  └ 구조 차이 · IP (4건)",
+    "cmpncd_MP": "  └ 구조 차이 · MP (2건)",
+    "cmpncd_ETP": "  └ 구조 차이 · ETP (1건)",
+    "cmpncd_CTX": "  └ 구조 차이 · CTX (1건)",
+    "cmpncd_LEV": "  └ 구조 차이 · LEV (1건)",
     # ────────── STMask A/B 사례 (2026-09-28 사용자 지시 "사례로 확인할 수 있도록") ──────────
     #   생성 = newmodel/build_stmask_subsets25.py · 대조 cdn_full 4시드 vs +sm20P 4시드 · 공통 패널 5,816
     #   ★sm20P 는 VME 를 3.25 줄이고 ME 를 7 늘려 가중식에서 상쇄됐다(−39 vs +42).
