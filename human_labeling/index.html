@@ -226,6 +226,11 @@
     font-weight: 700; color: #6a1b9a; margin-left: 4px;
   }
   #refVal .sub { font-weight: 400; color: #777; font-size: 11px; margin-left: 5px; }
+  #basisBox, #predBox { display:flex; align-items:center; gap:6px; font-size:12px;
+    padding:2px 8px; border-left:1px solid #ddd; white-space:nowrap }
+  #basisBox label { display:flex; align-items:center; gap:3px; cursor:pointer }
+  #basisBox.dyn { background:#fff4e5 }
+  #predVal { font-family:ui-monospace,monospace; font-size:11px }
   #bmdVal {
     color: var(--bmd); font-weight: 600; font-variant-numeric: tabular-nums;
     border: 1px solid var(--bmd); border-radius: 6px; padding: 2px 8px;
@@ -308,6 +313,19 @@
         <span id="teWellCount" class="te-well-count" hidden></span>
       </div>
       <div id="bmdBox"><span class="lb">BMD</span><span id="bmdVal">—</span></div>
+      <!-- ★판독 기준 전환(2026-10-12) — EN 운영은 dynamic 판정이 기준이라 그 조건의
+           사람 판독을 따로 받는다. 사진은 **전부 보여준다**(사용자 지시) —
+           정지시각은 참고 표시만. 두 기준은 CSV 칸이 달라 서로 덮지 않는다. -->
+      <div id="basisBox" title="판독 기준. dynamic 은 image_mic_dyn 칸에 따로 저장된다">
+        <span class="lb">기준</span>
+        <label><input type="radio" name="basis" value="" checked> 6h</label>
+        <label><input type="radio" name="basis" value="dyn"> dynamic</label>
+        <span id="dynT" class="lb"></span>
+      </div>
+      <span id="otherBasis" class="lb" title="다른 기준의 판독값"></span>
+      <div id="predBox" title="3구조 dynamic 판정(시드 4개 · 여러 값이면 시드마다 다름)">
+        <span class="lb">모델</span><span id="predVal">—</span>
+      </div>
       <!-- ★재현성 기준값 — 정본 mic_comparison_value(site×strain×약제 최빈,
            multimodal 이면 directional median). 재현성 EA 는 이 값 대비로 매겨진다.
            재현성 소스에서만 보인다. -->
@@ -602,6 +620,7 @@ async function selectSample(idx) {
   if (idx !== curIdx) return; // 그 사이 다른 걸 눌렀으면 무시
   curData = d;
   renderTitle(d);
+  updatePredBox(d);
   setFlags(d);
   setBmd(d);
   setModelMic(d);
@@ -666,10 +685,30 @@ function renderTitle(d) {
 
 function setSaveState(d) {
   const el = $('#saveState');
-  if (d.human_mic) { el.textContent = '저장됨: ' + d.human_mic; el.classList.add('saved'); }
-  else { el.textContent = '미저장'; el.classList.remove('saved'); }
+  // ★기준별로 다른 칸을 본다 — 6h 판독과 dynamic 판독이 공존한다
+  const mic = (curBasis === 'dyn') ? d.human_mic_dyn : d.human_mic;
+  const ch  = (curBasis === 'dyn') ? d.choice_dyn    : d.choice;
+  const tag = (curBasis === 'dyn') ? '[dyn] ' : '';
+  if (mic) { el.textContent = tag + '저장됨: ' + mic; el.classList.add('saved'); }
+  else { el.textContent = tag + '미저장'; el.classList.remove('saved'); }
   // 지울 라벨이 있을 때만 삭제 버튼을 켠다
-  $('#deleteBtn').disabled = !d.choice;
+  $('#deleteBtn').disabled = !ch;
+  // 다른 기준의 판독도 함께 보여 준다(두 기준 비교가 이 도구의 목적)
+  const other = (curBasis === 'dyn') ? d.human_mic : d.human_mic_dyn;
+  const olab  = (curBasis === 'dyn') ? '6h' : 'dyn';
+  const ob = $('#otherBasis');
+  if (ob) ob.textContent = other ? `${olab}: ${other}` : '';
+}
+
+/** 3구조 dynamic 판정 + 정지시각 표시. 값이 여러 개면 시드마다 다르다는 뜻이다. */
+function updatePredBox(d) {
+  const p = $('#predVal');
+  if (p) {
+    const v = d && d.pred3;
+    p.textContent = v ? `cmp ${v.complex || '—'} · ncd ${v.ncdiff || '—'} · ncctl ${v.ncctl || '—'}` : '—';
+  }
+  const t = $('#dynT');
+  if (t) t.textContent = (d && d.dyn_t) ? `정지 t${d.dyn_t}` : '';
 }
 
 /** TE 점수 -> 배지. 작동점은 검증셋에서 잡은 값(bubble 0.41 / film 0.31)을 쓰고,
@@ -763,7 +802,8 @@ function renderGrid(d) {
       html += '<td></td>';
     } else {
       const val = 'c' + row.conc_index;
-      const checked = d.choice === val ? 'checked' : '';
+      const curChoice = (curBasis === 'dyn') ? (d.choice_dyn || '') : (d.choice || '');
+      const checked = curChoice === val ? 'checked' : '';
       html += `<td class="radio-cell${checked ? ' checked' : ''}">` +
               `<label><input type="radio" name="mic" value="${val}" ${checked}></label></td>`;
     }
@@ -771,7 +811,7 @@ function renderGrid(d) {
   });
 
   // >=32 (전 농도 성장) — 다른 농도 라디오와 동일하게 오른쪽 컬럼에 정렬
-  const agChecked = d.choice === 'all_growth';
+  const agChecked = ((curBasis === 'dyn') ? d.choice_dyn : d.choice) === 'all_growth';
   const agBmd = d.bmd_choice === 'all_growth';
   html += `<tr${agBmd ? ' class="bmd-row"' : ''}>`;
   html += `<td class="row-conc">` + (agBmd ? '<span class="bmd-tag">BMD</span>' : '') +
@@ -814,6 +854,18 @@ function renderGrid(d) {
 // ---------- 셀 확대 보기 ----------
 let lbPos = null;   // {r, t} — 열려 있으면 좌표, 닫혀 있으면 null
 
+// ★판독 기준 — '' = 6h(기본) · 'dyn' = dynamic. 화면만 바뀌고 사진은 그대로 전부 보인다.
+let curBasis = '';
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('input[name="basis"]').forEach(inp => {
+    inp.onchange = () => {
+      curBasis = inp.value;
+      document.getElementById('basisBox').classList.toggle('dyn', curBasis === 'dyn');
+      if (curData) { renderGrid(curData); setSaveState(curData); updatePredBox(curData); }
+    };
+  });
+});
+
 function openLightbox(r, t) {
   if (!curData || !curData.rows) return;
   const row = curData.rows[r];
@@ -847,10 +899,12 @@ async function submitLabel(choice) {
   el.textContent = '저장 중…'; el.classList.remove('saved');
   const res = await fetchJSON('/api/label', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idx: curIdx, pkey: curData?.pkey, choice })
+    body: JSON.stringify({ idx: curIdx, pkey: curData?.pkey, choice, basis: curBasis })
   });
   if (res.ok) {
-    curData.choice = choice; curData.human_mic = res.human_mic;
+    // ★기준별로 다른 칸에 담는다 — 6h 판독을 dynamic 판독이 덮으면 비교가 불가능해진다
+    if (curBasis === 'dyn') { curData.choice_dyn = choice; curData.human_mic_dyn = res.human_mic; }
+    else { curData.choice = choice; curData.human_mic = res.human_mic; }
     setSaveState(curData);
     updateSampleStatus(curIdx, res.human_mic, choice);
     renderList();

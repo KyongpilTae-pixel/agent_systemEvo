@@ -232,6 +232,9 @@ SUBSET_LABELS = {
     #   ⚠bmd 승패로 결론내지 말 것 — 끌림 구간 bmd 는 사람 판독과 15% 만 맞는다
     #     [[prevctl-scoring-basis-25]]. 그래서 `both_wrong` 과 `cre` 를 육안 1순위로 뽑았다.
     "cmpncd_struct_diff": "★complex vs ncdiff 구조 차이 — SIR 3/4 이상 갈림 (68건)",
+    # ★LEV confidence threshold 0.7 (dynamic 기준) 로 **나빠진** 패널 — 적용 여부 판단용.
+    #   `lev_dyn_changed.csv` 의 나빠짐=True 고유 패널 8건. 사람 판독으로 bmd 오류인지 가린다.
+    "lev_thr07_worse": "★LEV thr 0.7 적용 손실 — dynamic 기준 (8건)",
     "cmpncd_both_wrong": "★둘 다 틀림 — 육안 1순위(bmd 를 의심할 구간) (5건)",
     "cmpncd_cre": "★CRE 셀에서 갈림 — IP·MP·ETP (7건 · VME=격리 누락)",
     "cmpncd_ncdiff_win": "ncdiff 가 bmd 와 일치 (30건)",
@@ -243,6 +246,21 @@ SUBSET_LABELS = {
     "cmpncd_ETP": "  └ 구조 차이 · ETP (1건)",
     "cmpncd_CTX": "  └ 구조 차이 · CTX (1건)",
     "cmpncd_LEV": "  └ 구조 차이 · LEV (1건)",
+    # ── 같은 비교를 **accuracy set(S26)** 에서 (2026-10-12 "다른거 accuracy set에 대해서도 해줘") ──
+    #   생성 = newmodel/build_cmp_ncdiff_base_acc25.py · 시점별 dynamic · 4시드 · GN-fermentative 한정.
+    #   ⚠**임상(d170) 판과 합산 금지** — 분모·검체·눈금이 다르다(accuracy 눈금은
+    #     bmd_plates_compositions_for_25). 임상 판은 `cmpncd_*`.
+    #   ★라벨 도구 사이드바에서 **소스를 'dRAST2.5 정확도' 로 바꿔야** 열린다[[labeling_3datasets_25]].
+    "cmpncdacc_struct_diff": "★[acc] complex vs ncdiff 구조 차이 — SIR 3/4 이상 (19건)",
+    "cmpncdacc_base_win": "[acc] complex(base) 가 bmd 와 일치 (11건)",
+    "cmpncdacc_ncdiff_win": "[acc] ncdiff 가 bmd 와 일치 (8건)",
+    "cmpncdacc_seed_noise": "[acc] 시드 잡음 — SIR 1~2/4 (62건 · 구조 차이 아님)",
+    "cmpncdacc_PTZ": "  └ [acc] 구조 차이 · PTZ (5건)",
+    "cmpncdacc_AMP": "  └ [acc] 구조 차이 · AMP (2건)",
+    "cmpncdacc_AZT": "  └ [acc] 구조 차이 · AZT (2건)",
+    "cmpncdacc_CPM": "  └ [acc] 구조 차이 · CPM (2건)",
+    "cmpncdacc_CXT": "  └ [acc] 구조 차이 · CXT (2건)",
+    "cmpncdacc_TOB": "  └ [acc] 구조 차이 · TOB (2건)",
     # ────────── STMask A/B 사례 (2026-09-28 사용자 지시 "사례로 확인할 수 있도록") ──────────
     #   생성 = newmodel/build_stmask_subsets25.py · 대조 cdn_full 4시드 vs +sm20P 4시드 · 공통 패널 5,816
     #   ★sm20P 는 VME 를 3.25 줄이고 ME 를 7 늘려 가중식에서 상쇄됐다(−39 vs +42).
@@ -418,6 +436,15 @@ CSV_FIELDS = [
     # ★웰(농도) 단위 TE. 패널 TE 와 별개다 — 패널 전체가 아니라 "이 칸만" 이상할 때 쓴다.
     #   토큰: 농도 행 `c<i>`(0=최저농도) · control 행 `k<i>`(0=첫 control). 예: "k1 c0 c3"
     "TE_wells",
+    # ★dynamic 기준 판독(2026-10-12 사용자 지시 "dynamic 기준으로도 할 수 있도록 하나 더").
+    #   EN 운영은 dynamic 판정이 기준이라 그 조건에서의 사람 판독이 따로 필요하다.
+    #   ⚠**사진은 전부 보여준다**(사용자 지시) — 프레임을 정지시점까지 자르지 않는다.
+    #     정지시각은 `dyn_t` 로 화면에 **표시만** 한다(모델이 무엇을 보고 멈췄는지 참고).
+    #   ⚠기존 `image_mic`(6h 기준)을 **덮지 않는다** — 같은 패널을 두 기준으로 비교하려면
+    #     둘이 공존해야 한다.
+    "image_mic_dyn",
+    "image_mic_order_dyn",
+    "ambiguous_dyn",
 ]
 
 
@@ -702,9 +729,44 @@ def load_labels() -> dict:
                     "ambiguous": _truthy(r.get("ambiguous", "")),
                     "TE": _truthy(r.get("TE", "")),
                     "TE_wells": [t for t in str(r.get("TE_wells", "")).split() if t],
+                    "human_mic_dyn": r.get("image_mic_dyn", ""),
+                    "choice_dyn": order_to_choice(r.get("image_mic_order_dyn", "")),
+                    "ambiguous_dyn": _truthy(r.get("ambiguous_dyn", "")),
                 }
     return labels
 
+
+# ★dynamic 정지시각 맵(2026-10-12) — 사진은 전부 보여주고 **표시만** 한다.
+#   생성 = newmodel 쪽 gate 재계산(c4=.980 c5=.940 · 검체 원자 · 4시드 다수결).
+#   ⚠4시드 전원 일치가 28.2% 뿐이다 — 기준선 자체가 ±1시점 흔들린다는 뜻이니
+#     판독 시 "그 시점만 믿을 근거"로 쓰지 말고 참고로만 본다.
+DYN_STOP = {}
+_dynp = '/home/kptae/data/allinfo/d25/dyn_stop_map25.csv'
+if os.path.exists(_dynp):
+    try:
+        with open(_dynp, newline='', encoding='utf-8-sig') as f:
+            for r in csv.DictReader(f):
+                DYN_STOP[(r['project_id'], r['sample_id'])] = dict(
+                    t=int(r['dyn_t']), agree=int(r.get('agree', 0)), seeds=int(r.get('seeds', 0)))
+        print(f"[human-labeling] dynamic 정지시각 맵 {len(DYN_STOP)} 검체", flush=True)
+    except Exception as e:                                             # noqa: BLE001
+        print(f"[human-labeling] ⚠정지시각 맵 로드 실패: {e}", flush=True)
+
+# ★3구조 dynamic 판정 맵(2026-10-12 사용자 지시 "판정 결과를 labeling system에 표시").
+#   값이 '16 / >=32' 처럼 여러 개면 **시드마다 다르다**는 뜻이다(뭉개지 않는다).
+#   정지시각도 시드마다 다를 수 있어 't5,t6' 형태로 둔다.
+PRED3 = {}
+_p3 = '/home/kptae/data/allinfo/d25/pred3_dyn_map25.csv'
+if os.path.exists(_p3):
+    try:
+        with open(_p3, newline='', encoding='utf-8-sig') as f:
+            for r in csv.DictReader(f):
+                PRED3[(r['project_id'], r['sample_id'], r['antimicrobial'])] = {
+                    'complex': r.get('pred_complex', ''), 'ncdiff': r.get('pred_ncdiff', ''),
+                    'ncctl': r.get('pred_ncctl', ''), 'stop': r.get('stop_ncdiff', '')}
+        print(f"[human-labeling] 3구조 판정 맵 {len(PRED3):,} 패널", flush=True)
+    except Exception as e:                                             # noqa: BLE001
+        print(f"[human-labeling] ⚠3구조 판정 맵 로드 실패: {e}", flush=True)
 
 LABELS = load_labels()
 
@@ -751,6 +813,9 @@ def save_labels():
                         "ambiguous": "1" if lab.get("ambiguous") else "0",
                         "TE": "1" if lab.get("TE") else "0",
                         "TE_wells": " ".join(lab.get("TE_wells") or []),
+                        "image_mic_dyn": lab.get("human_mic_dyn", ""),
+                        "image_mic_order_dyn": choice_to_order(lab.get("choice_dyn", "")),
+                        "ambiguous_dyn": "1" if lab.get("ambiguous_dyn") else "0",
                     }
                 )
     os.replace(tmp, CSV_PATH)
@@ -766,7 +831,9 @@ def get_entry(sample: dict) -> dict:
     if key not in LABELS:
         old = LABELS.pop((key[0], key[1], key[2], ""), None) if key[3] else None
         LABELS[key] = old if old is not None else {
-            "human_mic": "", "choice": "", "ambiguous": False, "TE": False, "TE_wells": []}
+            "human_mic": "", "choice": "", "ambiguous": False, "TE": False, "TE_wells": [],
+            # ★dynamic 기준 판독(별도 칸)
+            "human_mic_dyn": "", "choice_dyn": "", "ambiguous_dyn": False}
     return LABELS[key]
 
 
@@ -1247,6 +1314,13 @@ class Handler(BaseHTTPRequestHandler):
                     "bmd_choice": s["bmd_choice"],
                     "human_mic": lab["human_mic"] if lab else "",
                     "choice": lab["choice"] if lab else "",
+                    # ★dynamic 기준 판독(별도 칸) — 6h 판독을 덮지 않는다
+                    "human_mic_dyn": (lab.get("human_mic_dyn") if lab else "") or "",
+                    "choice_dyn": (lab.get("choice_dyn") if lab else "") or "",
+                    "ambiguous_dyn": bool(lab and lab.get("ambiguous_dyn")),
+                    # ★3구조 dynamic 판정 + 정지시각(표시용). 값이 여러 개면 시드마다 다름.
+                    "pred3": PRED3.get((s["project_id"], s["sample_id"], s["antimicrobial"]), {}),
+                    "dyn_t": (DYN_STOP.get((s["project_id"], s["sample_id"])) or {}).get("t", ""),
                     "ambiguous": bool(lab and lab.get("ambiguous")),
                     "TE": bool(lab and lab.get("TE")),
             "TE_wells": (lab.get("TE_wells") if lab else []) or [],
@@ -1331,7 +1405,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/unlabel":
-            self._handle_unlabel(idx, s)
+            self._handle_unlabel(idx, s, data)
             return
 
         # /api/label — MIC 라디오 선택
@@ -1342,23 +1416,30 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": str(e)}, 400)
             return
 
+        # ★basis — ''(기본=6h 기준) | 'dyn'(dynamic 기준). 서로 덮지 않는다.
+        sfx = "_dyn" if str(data.get("basis", "")) == "dyn" else ""
         with _lock:
             entry = get_entry(s)
-            entry["human_mic"] = mic
-            entry["choice"] = choice
+            entry["human_mic" + sfx] = mic
+            entry["choice" + sfx] = choice
             save_labels()
             done = count_done()
 
-        self._json({"ok": True, "idx": idx, "human_mic": mic, "choice": choice, "done": done})
+        self._json({"ok": True, "idx": idx, "human_mic": mic, "choice": choice,
+                    "basis": sfx.lstrip("_"), "done": done})
 
-    def _handle_unlabel(self, idx, s):
+    def _handle_unlabel(self, idx, s, data=None):
         """저장된 MIC를 지운다. ambiguous/TE 플래그도 없으면 항목 자체를 제거."""
         key = label_key(s)
+        sfx = "_dyn" if str((data or {}).get("basis", "")) == "dyn" else ""
         with _lock:
             entry = get_entry(s)
-            entry["human_mic"] = ""
-            entry["choice"] = ""
-            if not entry["ambiguous"] and not entry["TE"]:
+            entry["human_mic" + sfx] = ""
+            entry["choice" + sfx] = ""
+            # ★두 기준 모두 비고 플래그도 없을 때만 항목 제거
+            if (not entry["ambiguous"] and not entry["TE"]
+                    and not entry.get("human_mic") and not entry.get("human_mic_dyn")
+                    and not entry.get("ambiguous_dyn")):
                 del LABELS[key]
             save_labels()
             done = count_done()
@@ -1372,6 +1453,8 @@ class Handler(BaseHTTPRequestHandler):
             entry = get_entry(s)
             if "ambiguous" in data:
                 entry["ambiguous"] = bool(data["ambiguous"])
+            if "ambiguous_dyn" in data:
+                entry["ambiguous_dyn"] = bool(data["ambiguous_dyn"])
             if "TE" in data:
                 entry["TE"] = bool(data["TE"])
             # ★웰 단위 TE — {"te_well": "c0", "on": true} 로 한 칸씩 토글한다.
