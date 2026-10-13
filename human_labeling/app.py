@@ -235,6 +235,22 @@ SUBSET_LABELS = {
     # ★LEV confidence threshold 0.7 (dynamic 기준) 로 **나빠진** 패널 — 적용 여부 판단용.
     #   `lev_dyn_changed.csv` 의 나빠짐=True 고유 패널 8건. 사람 판독으로 bmd 오류인지 가린다.
     "lev_thr07_worse": "★LEV thr 0.7 적용 손실 — dynamic 기준 (8건)",
+    # ★accuracy(IVDR) 에서 LEV 가 떨어지는 원인 패널(2026-10-13).
+    #   dynamic 5.0h 정렬 기준 ncdiff·ncctl 둘 다 LEV bias −33~−41 로 FAIL 한다.
+    #   아래는 **평균 1칸 이상 과소예측**한 패널 — 2구조 × 4시드 **전원 일치**(n=8)라
+    #   시드 잡음이 아니다. 최악은 K. oxytoca 6칸. bias 를 만드는 주범이다.
+    "acc_lev_under": "★accuracy LEV 과소예측 — 1칸 이상·전시드 일치 (14건)",
+    # ★accuracy bias 기여 패널 — **정본 ivdr_accuracy25.attach_orders** 로 MIC order 를 붙여
+    #   bias 정의가 보는 조건으로 뽑았다: bmd_cat>0(최저칸 아님) AND diff<0(아래로 틀림).
+    #   ⚠raw MIC 를 log2 로 비교하면 안 된다 — CTX `bmd <=0.016 → 모델 <=1` 처럼
+    #     **측정 범위가 다른 것**을 "6칸 과대예측"으로 세게 된다(초판 오류, 2026-10-13).
+    #   재현 검증: 이 정의로 계산한 bias 가 리포트 값과 일치한다
+    #     (CTX −37.8/−38 · LEV −33.6/−33 · PTZ −30.2/−29 · TOB −37.1/−35).
+    #   ★4시드 중 3개 이상 일관된 것만 — 시드 잡음 제외.
+    "acc_ctx_bias": "★accuracy CTX bias 기여 — 과소예측 (12건)",
+    "acc_lev_bias": "★accuracy LEV bias 기여 — 과소예측 (15건)",
+    "acc_ptz_bias": "★accuracy PTZ bias 기여 — 과소예측 (14건)",
+    "acc_tob_bias": "★accuracy TOB bias 기여 — 과소예측 (11건)",
     # ★trailing — "많이 자랐는데(last growth_rate>=0.20) bmd 는 NG" 인 웰을 가진 패널.
     #   전 신호가 무너지는 구간이다(우리 44.0% · 운영 lrcn 45.1% · 규칙 7.1%).
     #   규모 2.56% 가 라벨↔이미지 충돌 상한 3.27% 와 비슷해 **라벨 천장인지 모델 약점인지**
