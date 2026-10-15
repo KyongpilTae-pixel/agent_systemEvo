@@ -339,7 +339,10 @@
            재현성 소스에서만 보인다. -->
       <div id="refBox" style="display:none"><span class="lb">기준(최빈)</span><span id="refVal">—</span></div>
       <div id="micBox" hidden><span class="lb">운영</span><span id="opMic">—</span>
-        <span class="lb" id="cdnLbl">cdn_6h</span><span id="cdnMic">—</span></div>
+        <span class="lb" id="cdnLbl">cdn_6h</span><span id="cdnMic">—</span>
+        <!-- ★dynamic — EN route 패널만 뜬다(2026-10-15 지시). 판정시각을 함께 보인다.
+             판정시각은 준비시간 포함(4.7=t4 · 5.7=t5 · 6.7=t6). -->
+        <span class="lb" id="dynLbl" hidden>dynamic</span><span id="dynMic" hidden>—</span></div>
       <div class="spacer"></div>
       <button class="btn" id="bmdToggle" title="BMD MIC 표시/감춤">BMD MIC<span class="kbd">b</span></button>
       <div class="zoom">
@@ -997,7 +1000,7 @@ function toggleBmd() {
 function setModelMic(d) {
   const box = $('#micBox');
   if (!box) return;
-  const has = d && (d.op_mic || d.cdn_mic);
+  const has = d && (d.op_mic || d.cdn_mic || d.dynp_mic);
   box.hidden = !has;
   if (has) {
     $('#opMic').textContent = d.op_mic || '—';
@@ -1007,6 +1010,22 @@ function setModelMic(d) {
     $('#cdnMic').title = d.cdn_mic ? '' : (d.cdn_note || '');
     $('#cdnMic').style.fontSize = d.cdn_mic ? '' : '11px';
     $('#cdnMic').style.opacity = d.cdn_mic ? '' : '0.7';
+    // ★dynamic — EN route 만 값이 온다. 없으면 칸째로 감춰 6h 만 보이게 둔다.
+    //   ⚠`dynp_`(panel) 접두 — 기존 `dyn_t` 는 d170 의 **검체 단위** 정지시각이라 다르다.
+    const dm = d && d.dynp_mic, show = !!dm;
+    $('#dynLbl').hidden = !show;
+    $('#dynMic').hidden = !show;
+    if (show) {
+      // 판정시각은 준비시간 포함 — 4.7=t4 · 5.7=t5 · 6.7=t6
+      const t = (d.dynp_t != null && d.dynp_t !== '') ? ' @' + Number(d.dynp_t).toFixed(1) + 'h' : '';
+      const sir = d.dynp_sir ? ' ' + d.dynp_sir : '';
+      $('#dynMic').textContent = dm + t + sir;
+      const st = d.dynp_steps || {};
+      const seq = ['3h', '4h', '5h', '6h'].filter(k => st[k])
+                    .map(k => k + ' ' + st[k]).join('  →  ');
+      // 시점별 MIC 를 툴팁으로 — "언제부터 그렇게 봤나"를 바로 본다
+      $('#dynMic').title = seq ? ('시점별 MIC   ' + seq) : '';
+    }
   }
 }
 function setBmd(d) {

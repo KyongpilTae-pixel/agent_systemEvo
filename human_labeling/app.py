@@ -1004,6 +1004,12 @@ def ensure_cells(sample: dict) -> dict:
     return {"time_len": time_len, "time_len_default": min(time_len, DEFAULT_TIME_LEN),
             "rows": rows,
             "cdn_mic": cdn_mic, "op_mic": (_mr or {}).get("op_mic"),
+            # ★dynamic — EN route 패널만 값이 있다(2026-10-15 지시). 없으면 프론트가 칸을 감춘다.
+            #   `dynp_t` 는 **준비시간 포함** 판정시각(4.7=t4 · 5.7=t5 · 6.7=t6).
+            #   ⚠접두 `dynp_`(panel)로 둔다 — 기존 `dyn_t` 는 d170 `DYN_STOP` 의
+            #     **검체 단위** 정지시각이라 같은 이름을 쓰면 서로 덮어쓴다.
+            "dynp_mic": (_mr or {}).get("dyn_mic"), "dynp_sir": (_mr or {}).get("dyn_sir"),
+            "dynp_t": (_mr or {}).get("dyn_t"), "dynp_steps": (_mr or {}).get("dyn_steps"),
             # ★우리 모델 이름 — 오버레이마다 다르다(d170 = cdn_6h · PA 정확도 = ncdiff__enpa)
             "our_name": (_mr or {}).get("our_name") or "cdn_6h",
             # ★구조모델 값이 없을 때만 사유를 붙인다
@@ -1351,6 +1357,11 @@ class Handler(BaseHTTPRequestHandler):
                     "our_name": layout.get("our_name"),
                     # ★구조모델 값이 없는 사유(EN 전용 / 미추론)
                     "cdn_note": layout.get("cdn_note"),
+                    # ★dynamic(패널 단위) — EN route 만. 6h 와 **나란히** 보여준다.
+                    "dynp_mic": layout.get("dynp_mic"),
+                    "dynp_sir": layout.get("dynp_sir"),
+                    "dynp_t": layout.get("dynp_t"),
+                    "dynp_steps": layout.get("dynp_steps"),
                     "all_growth_label": f">={hi}",
                     "bmd_mic": s["bmd_mic"],
                     "bmd_choice": s["bmd_choice"],
