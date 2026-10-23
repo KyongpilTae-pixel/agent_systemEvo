@@ -190,6 +190,14 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── gap2 우선순위 (2026-10-23 "label 이 꼭 필요한 것 필터") ──────────
+    #   생성 = 2.5 newmodel/build_gap2_priority25.py · Train 한정(Test 는 평가셋 오염).
+    #   합의는 **PA403 을 본 적 없는 16모델**(기존 enpa 8 + same_mic_extend 8).
+    #   ★P1 이 최우선 — 모델이 한목소리인데 bmd 만 다르다 = imgcons 전제를 **직접 검증**한다.
+    #     사람이 모델 편이면 라벨 정화(arm b/c)가 옳고, bmd 편이면 설계 전제가 틀린 것이다.
+    "pa403_gap2_p1": "gap2 ★★P1 모델 만장일치 ≠ bmd (103건 · 최우선)",
+    "pa403_gap2_p2": "gap2 ★P2 모델도 갈림 (258건 · 사람만 답 가능)",
+    "pa403_gap2_p3": "gap2 ★P3 bmd=R 인데 합의는 S 방향 (15건 · VME 위험)",
     # ────────── PA403 학습셋 라벨 검토 (2026-10-23) ──────────
     #   생성 = 2.5 저장소 newmodel/build_pa403_subsets25.py · 소스 `dRAST2.5_PA403학습셋` 전용.
     #   성장 판정은 **셀별 정본 임계값**(dRAST_Thresholds_25.db) · 이미지 MIC 는 정본 mic_official.
