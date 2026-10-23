@@ -177,6 +177,18 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── PA accuracy 3축 (2026-10-23 사용자 지시 "라벨 시스템에 만들어") ──────────
+    #   생성 = newmodel/build_acc_pa_subsets25.py · 소스 `dRAST2.5_정확도` 전용.
+    #   분모 = **공통 분모**(운영이 수치 MIC 를 낸 행) · PA 한정 9약제 × 14검체 = 126.
+    #   ★셀 n=14 라 **검체 1~2개로 PASS/FAIL 이 갈린다** — EA 85.71%=2건 틀림, 92.86%=1건 틀림.
+    #     accuracy 운영 8/9 · baseline 8/9 · cdn_full__pa403 7/9 의 차이가 여기서 난다.
+    #   ★`라벨 의심`/`모델 잘못` 은 쟁점 웰(예측 MIC~bmd MIC)이 실제로 자랐는지로 가른다.
+    #     근거는 장비 rule(threshold_gng)과 control 대비 성장률뿐 — **모델 출력은 쓰지 않는다**.
+    "acc_pa_all": "PA accuracy 공통분모 전체 (126건)",
+    "acc_pa_new_fail": "PA accuracy ★cdn_full__pa403 만 EA 실패 (7건 · 기존은 맞힘)",
+    "acc_pa_label_susp": "PA accuracy ★라벨 의심 — 쟁점 웰 전부 미성장 (33건)",
+    "acc_pa_model_wrong": "PA accuracy 모델 잘못 — 쟁점 웰 전부 성장 (23건)",
+    "acc_pa_all_fail": "PA accuracy 3축 전부 EA 실패 (2건 · 모델 아닌 쪽)",
     # ────────── PTZ 4h 사례 (2026-09-29 사용자 지시 "4시간에 운영이 더 잘 맞힌 PTZ 필터") ──────────
     #   생성 = newmodel/build_ptz_subsets25.py · PTZ 정답 R 42패널 대상
     #   ★PTZ 는 우리 dynamic 의 VME 열위가 가장 몰린 약제이고(운영 7 → 우리 10),
@@ -203,6 +215,19 @@ SUBSET_LABELS = {
     "prevctl_missed": "prev_ctl ★임계로 놓침 — bmd 도 G 인데 Δp<0.7 (1건)",
     "prevctl_held": "prev_ctl 올바르게 가림 — bmd 는 NG 이고 안 풀렸다 (7건)",
     "prevctl_all": "prev_ctl PTZ 끌림 전체 (16건)",
+    # ────────── DAP 이미지↔MIC 불일치 (2026-10-23 사용자 지시 "dap는 human label이 필요해") ──────────
+    #   생성 = drast_25_lrcn/newmodel/build_dap_label25.py · d170 GP 라우팅 DAP 150패널 대상
+    #   ★왜 사람이 봐야 하나 — DAP 는 **규모로도 구조로도 안 움직인다**:
+    #     9셀 중 8셀이 nR=0(전부 감수성)이고 실패 사유가 **전부 ME**(S→R 오판)이며,
+    #     GP 합본 학습(4,284+1,833 → 6,117패널, 1.4배)으로 **살림 0 · 깨뜨림 0**.
+    #     3구조(ncpos·tpool·tpnc) 모두 9개 Staph 종에서 단독과 동일하게 FAIL.
+    #   ★상수 벤치에서도 DAP 만 유독 나쁘다 — 상수 EA 100.0 vs 모델 90.2(Δ −9.7, 11셀 중 7셀 패).
+    #   실측 불일치: |희석단계 차| >= 2 가 **28/150건(18.7%)** · ME 18건 중 **14건이 2단계 이상**
+    #     `bmd 0.5 → pred 2` 7건 · `bmd 0.5 → pred >=8` 4건 — 바닥 칸인데 모델은 2~8 로 읽는다.
+    #   → 사람 판독이 **모델이 맞고 bmd 가 틀린 것(라벨 천장)인지** 가른다.
+    "dap_me": "DAP ★ME 판정 — S를 R로 오판 (18패널 · 운영 안전성 직결)",
+    "dap_gap2": "DAP 이미지↔MIC 2희석 이상 차 — ME 아님 (14패널 · 라벨 천장 추정)",
+    "dap_all": "DAP 사람 판독 대상 전체 (32패널)",
     # ── ★ME 중심 육안 필터 (2026-10-07 사용자 지시 "me가 늘어난 것은 육안 판정이 필요함") ──
     #   생성 = newmodel/build_prevctl_me_subsets25.py · `complex_full` **전 약제** 정상 vs prev_ctl 비교.
     #   bmd 기준 순효과 = ME +26 / VME −8. 그런데 ★**bmd 가 이 구간에서 사람 판독과 15.2% 만 일치**한다
