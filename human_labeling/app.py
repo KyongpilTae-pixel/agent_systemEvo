@@ -99,6 +99,19 @@ SOURCES = [
         "parquet": "/home/kptae/data/allinfo/d25/accuracy25_label_source.parquet",
         "allinfo": None,
     },
+    {
+        # ★PA403 학습셋(2026-10-23 사용자 지시 "pa403 학습셋도 label system 에 올리자").
+        #   왜 — PA403 Train 은 bmd 라벨과 이미지 성장이 **14.76%** 어긋난다(d170 EN 6.52%의 2.3배).
+        #     그 잡음을 `cdn_full__pa403` 이 확신까지 포함해 배웠고(과신 +0.105 ·
+        #     AUROC(conf→정답) 0.590), 임상에서는 거짓NG 로 순 +80 패널을 **벌고** 있다.
+        #     충돌 웰을 사람이 찍어야 (a)모델 잘못 (b)라벨 문제 가 갈린다.
+        #   ⚠`concentration` 이 **실제 농도값**이다(d170 의 rank 아님).
+        "id": "d25_pa403",
+        "label": "dRAST2.5_PA403학습셋",
+        "loader": "png25",
+        "parquet": "/home/kptae/data/allinfo/d25/pa403_label_source.parquet",
+        "allinfo": None,
+    },
     # ★FDA analytical 6셋 — 2.5 (2026-10-07 사용자 지시 "이 데이터셋들도 레이블 시스템에 넣어줘").
     #   d25 와 같은 `png25` 로더. 같은 서버에서 사이드바 최상위로 전환된다.
     #   ⚠**bmd 정답이 없다** — 간섭물질·안정성은 control 검체 MIC 중앙값 대비 ±1희석으로 EA 를
@@ -177,6 +190,15 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── PA403 학습셋 라벨 검토 (2026-10-23) ──────────
+    #   생성 = 2.5 저장소 newmodel/build_pa403_subsets25.py · 소스 `dRAST2.5_PA403학습셋` 전용.
+    #   성장 판정은 **셀별 정본 임계값**(dRAST_Thresholds_25.db) · 이미지 MIC 는 정본 mic_official.
+    #   ★`gap2` 가 최우선 — bmd 와 이미지가 2단계 이상 벌어진 패널이고, 임상 `gap<2` 축에서
+    #     빼는 집단과 같다. 여기서 사람 MIC 가 어느 쪽 손을 들어주는지가 핵심 증거다.
+    "pa403_gap2": "PA403 ★★bmd↔이미지 2단계 이상 괴리 (615건 · 최우선)",
+    "pa403_gap1": "PA403 bmd↔이미지 1단계 차이 (2,551건)",
+    "pa403_conflict": "PA403 ★웰 충돌(자람↔라벨NG 등) 있는 패널 (1,091건)",
+    "pa403_train": "PA403 Train 전체 (5,039건)",
     # ────────── PA accuracy 3축 (2026-10-23 사용자 지시 "라벨 시스템에 만들어") ──────────
     #   생성 = newmodel/build_acc_pa_subsets25.py · 소스 `dRAST2.5_정확도` 전용.
     #   분모 = **공통 분모**(운영이 수치 MIC 를 낸 행) · PA 한정 9약제 × 14검체 = 126.
