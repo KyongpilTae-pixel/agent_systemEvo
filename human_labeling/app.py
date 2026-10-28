@@ -190,6 +190,14 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── d170 PA bmd 의심 (2026-10-28 사용자 지시 "f170에서 bmd와 차이나는 것 라벨") ──────────
+    #   생성 = 2.5 newmodel/build_pa403_trusted25.py --dataset d170pa (기준 D · 정밀도 0.990)
+    #   기준 D = (모델 그룹중앙값 ↔ bmd 거리 >= 3칸) AND (|trpa − smx| <= 1칸)
+    #   ★근거를 둘로 나눈다 — `trpa`(train_d170_enpa)는 **d170 PA Train 46검체를 학습에 썼다**.
+    #     그 33건은 자기가 본 것을 심판하는 셈이라 약하다. `strong` 30건부터 보는 것이 맞다.
+    "d170pa_susp_strong": "d170 PA ★★bmd 의심 — 계통 독립 (30건 · 최우선)",
+    "d170pa_susp_weak": "d170 PA bmd 의심 — trpa 자기심판 (33건 · 근거 약함)",
+    "d170pa_susp_all": "d170 PA bmd 의심 전체 (63건)",
     # ────────── gap2 우선순위 (2026-10-23 "label 이 꼭 필요한 것 필터") ──────────
     #   생성 = 2.5 newmodel/build_gap2_priority25.py · Train 한정(Test 는 평가셋 오염).
     #   합의는 **PA403 을 본 적 없는 16모델**(기존 enpa 8 + same_mic_extend 8).
