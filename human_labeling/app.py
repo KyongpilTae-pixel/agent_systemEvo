@@ -227,6 +227,11 @@ SUBSET_LABELS = {
     "acc_pa_label_susp": "PA accuracy ★라벨 의심 — 쟁점 웰 전부 미성장 (33건)",
     "acc_pa_model_wrong": "PA accuracy 모델 잘못 — 쟁점 웰 전부 성장 (23건)",
     "acc_pa_all_fail": "PA accuracy 3축 전부 EA 실패 (2건 · 모델 아닌 쪽)",
+    # ── 2026-11-02 사용자 지시 "7.9% 에 해당하는 것을 label" ──
+    #   모델 합의(trpa full 8 + smx 8 = 16모델 MIC 중앙값) ↔ bmd 거리 ≥3칸. PA 127패널 중 10.
+    #   `_strong` = 두 계통 차 ≤1칸(기준 D 충족) — 독립 두 계통이 같은 쪽이라 라벨 의심이 더 강하다.
+    "acc_pa_dist3": "PA accuracy ★모델합의↔bmd 3칸 이상 (10건 · 127의 7.9%)",
+    "acc_pa_dist3_strong": "PA accuracy ★3칸 이상 + 두 계통 일치(기준 D) (4건)",
     # ────────── PTZ 4h 사례 (2026-09-29 사용자 지시 "4시간에 운영이 더 잘 맞힌 PTZ 필터") ──────────
     #   생성 = newmodel/build_ptz_subsets25.py · PTZ 정답 R 42패널 대상
     #   ★PTZ 는 우리 dynamic 의 VME 열위가 가장 몰린 약제이고(운영 7 → 우리 10),
