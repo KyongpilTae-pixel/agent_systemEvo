@@ -232,6 +232,16 @@ SUBSET_LABELS = {
     #   `_strong` = 두 계통 차 ≤1칸(기준 D 충족) — 독립 두 계통이 같은 쪽이라 라벨 의심이 더 강하다.
     "acc_pa_dist3": "PA accuracy ★모델합의↔bmd 3칸 이상 (10건 · 127의 7.9%)",
     "acc_pa_dist3_strong": "PA accuracy ★3칸 이상 + 두 계통 일치(기준 D) (4건)",
+    # ── 2026-11-02 사용자 지시 "운영장비와 우리모델이 차이가 나는 것 label" ──
+    #   d170 PA · 운영 장비 drast_mic ↔ ba(B축 bmd 라벨, PA403 400검체 학습, 4시드 MIC 최빈) EA 불일치.
+    #   장비 MIC 있는 1,018패널 중 105(10.3%). ★105 중 97 은 모델 차이(장비 LRCN 6h ↔ ba)이고
+    #   후처리 차이는 2 뿐이다(PA 는 dynamic 없음 · 후처리가 MIC 를 바꾼 패널 6).
+    #   누가 bmd 와 맞는지로 쪼갠다 — bmd 는 판정이 아니라 참고다.
+    "d170pa_devba_all": "d170 PA ★운영장비↔ba 불일치 전체 (105건)",
+    "d170pa_devba_todo": "d170 PA 운영장비↔ba 불일치 · 미판독만 (96건)",
+    "d170pa_devba_devwin": "d170 PA 운영장비↔ba 불일치 · 장비만 bmd 일치 (84건)",
+    "d170pa_devba_bawin": "d170 PA 운영장비↔ba 불일치 · ba만 bmd 일치 (7건)",
+    "d170pa_devba_bothfail": "d170 PA 운영장비↔ba 불일치 · 둘 다 bmd 불일치 (3건)",
     # ────────── PTZ 4h 사례 (2026-09-29 사용자 지시 "4시간에 운영이 더 잘 맞힌 PTZ 필터") ──────────
     #   생성 = newmodel/build_ptz_subsets25.py · PTZ 정답 R 42패널 대상
     #   ★PTZ 는 우리 dynamic 의 VME 열위가 가장 몰린 약제이고(운영 7 → 우리 10),
