@@ -257,6 +257,13 @@ SUBSET_LABELS = {
     "d170pa_v6err_vme_todo": "d170 PA ★★PA 변형 bmd VME · 미판독 (14건 · 최우선)",
     "d170pa_v6err_me_todo": "d170 PA PA 변형 bmd ME · 미판독 (36건)",
     "d170pa_v6err_all": "d170 PA PA 변형 bmd VME·ME 전체 (91건 · 판독 포함)",
+    # ── 2026-11-09 사용자 지시 "올려줘" — bmd **없는** d170 PA 에서 운영 장비 ↔ bv6 s101 SIR 이 갈린 패널 ──
+    #   생성 = 2.5 newmodel/build_nobmd_sir_pa25.py (+ compare/nobmd_sir_pa25_growth.csv 성장곡선 판정).
+    #   S↔R 19 은 전부 장비 S · bv6 R(KUMC_2025 6검체 + ISRAEL 917706322A) · CAZ·CPM·PTZ·AZT·IP.
+    #   성장곡선(이미지 규칙)은 17/19 가 bv6 편 — control 만큼 자란 웰을 장비 LRCN 이 NG 로 읽었다.
+    #   ★판독 목적: β-lactam filament(길어지기만 하고 분열 안 함)를 '성장' 으로 볼지 — 면적 규칙은 못 가른다.
+    "d170pa_nobmd_sr": "d170 PA ★★bmd 없음 · 장비 S ↔ bv6 R (19건 · 최우선)",
+    "d170pa_nobmd_minor": "d170 PA bmd 없음 · 장비 ↔ bv6 minor(S↔I·I↔R) (44건)",
     # ────────── PTZ 4h 사례 (2026-09-29 사용자 지시 "4시간에 운영이 더 잘 맞힌 PTZ 필터") ──────────
     #   생성 = newmodel/build_ptz_subsets25.py · PTZ 정답 R 42패널 대상
     #   ★PTZ 는 우리 dynamic 의 VME 열위가 가장 몰린 약제이고(운영 7 → 우리 10),
