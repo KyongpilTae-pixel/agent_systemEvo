@@ -250,6 +250,13 @@ SUBSET_LABELS = {
     "d170pa_devluck": "d170 PA ★장비가 이미지규칙과 어긋난 웰 덕에 맞힌 패널 (98건)",
     "d170pa_devluck8": "d170 PA 장비 오류덕 맞힘 · 공통 8약제만 (82건)",
     "d170pa_devunluck": "d170 PA 장비가 이미지규칙과 어긋난 웰 때문에 틀린 패널 (31건)",
+    # ── 2026-11-09 사용자 지시 "라벨링 도구에 올려줘" — PA 변형 bmd 오류의 사람 판독 ──
+    #   생성 = 2.5 newmodel/build_v6_err_subsets25.py · V6·V5·V6 단일(bv6)·장비 × 8시드가 d170 PA
+    #   (8약제 · 의심라벨 제외)에서 낸 bmd 기준 VME·ME 패널. todo = 사람 판독 없음. CSV 는 hits(그 오류를 낸
+    #   변형×시드 수) 내림차순 — 위에서부터 본다. 판독 목적: bmd VME 가 실제 VME 인지(라벨 문제인지) 가른다.
+    "d170pa_v6err_vme_todo": "d170 PA ★★PA 변형 bmd VME · 미판독 (14건 · 최우선)",
+    "d170pa_v6err_me_todo": "d170 PA PA 변형 bmd ME · 미판독 (36건)",
+    "d170pa_v6err_all": "d170 PA PA 변형 bmd VME·ME 전체 (91건 · 판독 포함)",
     # ────────── PTZ 4h 사례 (2026-09-29 사용자 지시 "4시간에 운영이 더 잘 맞힌 PTZ 필터") ──────────
     #   생성 = newmodel/build_ptz_subsets25.py · PTZ 정답 R 42패널 대상
     #   ★PTZ 는 우리 dynamic 의 VME 열위가 가장 몰린 약제이고(운영 7 → 우리 10),
