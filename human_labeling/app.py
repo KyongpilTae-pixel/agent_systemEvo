@@ -190,6 +190,12 @@ BMD_HIDDEN_DRUGS = {"CAZC", "CTXC", "HLG", "HLS", "CXS"}
 #   파일을 넣기만 하면 자동으로 잡히므로, 새 검토 목록이 생기면 CSV 만 떨구면 된다.
 SUBSET_DIR = os.path.join(HERE, "subsets")
 SUBSET_LABELS = {
+    # ────────── GP 운영만 통과 셀 (2026-11-17 사용자 "운영만 통과하는 셀에 대해서 운영만 맞히는 것") ──────────
+    #   생성 = 2.5 newmodel/build_gp_oponly_subsets25.py · 축 = 배포재현 수정 조립(daxfix) Test · 소스 dRAST2.5_d170
+    #   셀 = 운영 LRCN(배포 가중치 재추론 6h) PASS 인데 LRCN 재학습(fix·cl·clwv) 시드 ≥3/4 FAIL
+    #   패널 = 그 셀에서 운영은 맞고(EA·VME·ME 없음) 재학습은 시드 ≥3/4 가 틀린 것. ★대부분 n 3~5 셀이다
+    "gp_oponly_panels": "운영비교 GP ★운영만 맞힌 패널 — LRCN 재학습은 틀림 (17건 · Staph)",
+    "gp_oponly_cells": "운영비교 GP 운영만 통과 셀 전체 패널 (135건 · 맥락용)",
     # ────────── d170 PA bmd 의심 (2026-10-28 사용자 지시 "f170에서 bmd와 차이나는 것 라벨") ──────────
     #   생성 = 2.5 newmodel/build_pa403_trusted25.py --dataset d170pa (기준 D · 정밀도 0.990)
     #   기준 D = (모델 그룹중앙값 ↔ bmd 거리 >= 3칸) AND (|trpa − smx| <= 1칸)
