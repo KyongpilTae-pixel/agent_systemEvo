@@ -55,6 +55,9 @@
     #subsetFilter { flex:1 1 auto; min-width:0; font-size:12px; padding:4px 6px;
       border:1px solid #d7dce5; border-radius:6px; background:#fff; color:#1a2330; }
     #subsetFilter.on { border-color:#2f6fd0; background:#eef4ff; font-weight:600; }
+    #subsetSearch { flex:0 1 150px; min-width:70px; font-size:12px; padding:4px 6px;
+      border:1px solid #d7dce5; border-radius:6px; background:#fff; color:#1a2330; }
+    #subsetSearch.on { border-color:#2f6fd0; background:#eef4ff; }
     #bmdOnlyWrap, #showFullWrap { display:flex; align-items:center; gap:3px; font-size:12px; color:#456;
       white-space:nowrap; cursor:pointer; user-select:none; }
     #bmdOnlyWrap.on, #showFullWrap.on { color:#2f6fd0; font-weight:600; }
@@ -289,6 +292,8 @@
       </div>
       <div id="subsetWrap" title="검토 목록만 골라 보기 (단축키 f)">
         <span class="lb">보기</span>
+        <input type="text" id="subsetSearch" placeholder="필터 검색 (Enter=첫 항목)" autocomplete="off"
+               title="필터 이름 검색 — 띄어쓰기로 여러 단어(모두 포함). 예: 'tpnc ME', 'Ent 운영'. Esc=지우기">
         <select id="subsetFilter"><option value="">전체</option></select>
         <label id="bmdOnlyWrap" title="bmd(참조 MIC)가 있는 패널만 — 없으면 bmd·운영·구조모델 칸이 모두 빈다">
           <input type="checkbox" id="bmdOnly"><span>bmd만</span>
@@ -389,15 +394,31 @@ async function loadSubsets() {
   let d;
   try { d = await fetchJSON('/api/subsets'); } catch (e) { return; }
   const sel = $('#subsetFilter');
-  for (const x of (d.subsets || [])) {
-    const o = document.createElement('option');
-    o.value = x.id;
-    o.textContent = `${x.label} (${x.count})`;
-    sel.appendChild(o);
-  }
-  if (subsetFilter && !(d.subsets || []).some(x => x.id === subsetFilter)) subsetFilter = '';
+  SUBSET_LIST = d.subsets || [];
+  fillSubsetOptions('');
+  if (subsetFilter && !SUBSET_LIST.some(x => x.id === subsetFilter)) subsetFilter = '';
   sel.value = subsetFilter;
   sel.classList.toggle('on', !!subsetFilter);
+
+  // ★필터 검색창(2026-11-18 사용자 지시 "필터 검색 창 만들어줘") — 목록이 길어 찾기 어렵다.
+  const q = $('#subsetSearch');
+  if (q) {
+    q.addEventListener('input', () => {
+      const n = fillSubsetOptions(q.value);
+      q.classList.toggle('on', !!q.value.trim());
+      q.title = q.value.trim() ? `일치 ${n}개` : q.title;
+    });
+    q.addEventListener('keydown', (e) => {
+      if (e.isComposing) return;
+      if (e.key === 'Enter') {                       // 첫 일치 항목 바로 선택
+        if (sel.dataset.first) setSubset(sel.dataset.first);
+        e.preventDefault();
+      } else if (e.key === 'Escape') {
+        q.value = ''; fillSubsetOptions(''); q.classList.remove('on'); q.blur();
+        e.preventDefault();
+      }
+    });
+  }
   sel.addEventListener('change', () => setSubset(sel.value));
 
   const cb = $('#bmdOnly');
@@ -423,6 +444,30 @@ async function loadSubsets() {
       if (curData) renderGrid(curData);       // 다시 그리기만 하면 된다(재요청 불필요)
     });
   }
+}
+
+let SUBSET_LIST = [];
+/** 검색어(공백으로 나눈 단어 모두 포함, 대소문자 무시)에 맞는 필터만 선택 상자에 남긴다.
+ *  지금 고른 필터는 검색에 안 걸려도 남긴다(선택이 풀리지 않게). 반환 = 일치 개수. */
+function fillSubsetOptions(query) {
+  const sel = $('#subsetFilter');
+  const terms = (query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = x => { const t = `${x.label} ${x.id}`.toLowerCase(); return terms.every(w => t.includes(w)); };
+  sel.innerHTML = '';
+  const all = document.createElement('option'); all.value = ''; all.textContent = '전체'; sel.appendChild(all);
+  let n = 0, first = '';
+  for (const x of SUBSET_LIST) {
+    const m = hit(x);
+    if (!m && x.id !== subsetFilter) continue;
+    if (m) { n++; if (!first) first = x.id; }
+    const o = document.createElement('option');
+    o.value = x.id;
+    o.textContent = `${x.label} (${x.count})`;
+    sel.appendChild(o);
+  }
+  sel.value = subsetFilter;
+  sel.dataset.first = terms.length ? first : '';
+  return n;
 }
 
 function setSubset(v) {
