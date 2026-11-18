@@ -197,6 +197,7 @@ SUBSET_LABELS = {
     "gp_oponly_panels": "운영비교 GP ★운영만 맞힌 패널 — LRCN 재학습은 틀림 (17건 · Staph)",
     "gp_oponly_cells": "운영비교 GP 운영만 통과 셀 전체 패널 (135건 · 맥락용)",
     "gp_tpnc_me_up_ent": "운영비교 Ent ★tpnc만 ME(운영은 정상) — cl·fix 시드 ≥1/4 (26건 · LEV·LNZ 경계 다수)",
+    "gp_cdncl_worse_sta": "운영비교 Staph ★cdn cl 열세 — 운영 정답·cdn cl 시드 ≥3/4 오류 (32건 · LNZ 14·TEI 7)",
     # ────────── d170 PA bmd 의심 (2026-10-28 사용자 지시 "f170에서 bmd와 차이나는 것 라벨") ──────────
     #   생성 = 2.5 newmodel/build_pa403_trusted25.py --dataset d170pa (기준 D · 정밀도 0.990)
     #   기준 D = (모델 그룹중앙값 ↔ bmd 거리 >= 3칸) AND (|trpa − smx| <= 1칸)
