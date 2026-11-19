@@ -201,6 +201,9 @@ SUBSET_LABELS = {
     # ★2026-11-19 allnb(원본 Train+Test 학습 → d170 학습외) 상위 3구조 allnbcl 12판 중 ≥3판 반복 VME
     #   생성 = newmodel/data/gp_allnb_vme25.csv · 유형 = 운영도VME / 구조만VME
     "gp_allnb_vme": "allnb GP ★구조 반복 VME — 상위3구조 12판 중 ≥3 (49건 · Staph 42[운영도 29] · Ent 7[운영도 6])",
+    # ★2026-11-19 사용자 "구조만 사람기준으로 틀리는 것 (vme, me) 필터로" — 4시드 앙상블(Staph cdn·ncctl·tpnc)이 사람 판독 기준 VME/ME,
+    #   운영(LRCN 6h 또는 후처리) 중 하나는 맞힘. 생성 = drast_25_lrcn/newmodel/data/gp_struct_only_err_human25.csv
+    "gp_struct_only_err": "GP ★구조만 틀림(사람 판독 기준) — 앙상블 VME 8 · ME 4 (Staph 12 · Ent 0)",
     # ────────── d170 PA bmd 의심 (2026-10-28 사용자 지시 "f170에서 bmd와 차이나는 것 라벨") ──────────
     #   생성 = 2.5 newmodel/build_pa403_trusted25.py --dataset d170pa (기준 D · 정밀도 0.990)
     #   기준 D = (모델 그룹중앙값 ↔ bmd 거리 >= 3칸) AND (|trpa − smx| <= 1칸)
